@@ -131,6 +131,3 @@ npm run dist:portable
 - 全局抓取依赖系统复制行为，某些高权限窗口可能无法抓取。
 - 桌面模式是 Electron 下的近似实现，不是系统底层壁纸层嵌入。
 
-## 开源协议
-
-MIT License
