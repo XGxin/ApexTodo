@@ -1,0 +1,79 @@
+{
+  "name": "apex-todo",
+  "version": "1.0.0",
+  "description": "ApexTodo local markdown todo desktop widget",
+  "main": "dist-electron/main.js",
+  "author": "you",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:main\" \"npm:dev:electron\"",
+    "dev:renderer": "node ./node_modules/vite/dist/node/cli.js",
+    "dev:main": "tsup --config tsup.config.ts --watch",
+    "dev:electron": "wait-on tcp:5190 dist-electron/main.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5190 nodemon --watch dist-electron --exec electron .",
+    "build": "npm run build:renderer && npm run build:main",
+    "build:renderer": "node ./node_modules/vite/dist/node/cli.js build",
+    "build:main": "tsup --config tsup.config.ts",
+    "preview": "node ./node_modules/vite/dist/node/cli.js preview",
+    "dist": "npm run build && electron-builder --win nsis",
+    "dist:portable": "npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/modifiers": "^9.0.0",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "clsx": "^2.1.1",
+    "dayjs": "^1.11.13",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "webdav": "^5.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.1.1",
+    "electron-builder": "^25.1.8",
+    "nodemon": "^3.1.9",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "tsup": "^8.3.6",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.6",
+    "wait-on": "^9.0.4"
+  },
+  "build": {
+    "appId": "com.apextodo.app",
+    "productName": "ApexTodo",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
