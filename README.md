@@ -1,14 +1,26 @@
-# ApexTodo（Windows 桌面待办）
+# ApexTodo
 
-一个追求极速录入与视觉降噪的本地 Markdown 桌面待办工具。
+一个面向 Windows 的本地 Markdown 待办桌面工具，强调录入效率、低干扰和可持续同步。
+
+## 功能特性
+
+- 本地 Markdown 存储：所有任务都写入单一 `todo.md` 文件。
+- 极简桌面窗口：无边框风格、托盘化使用、低干扰界面。
+- 双区任务流转：待办区与已完成折叠区自动流转。
+- 拖拽排序：主列表拖拽后，按新顺序覆盖写回 `todo.md`。
+- 全局热键抓取：可自定义热键，后台复制选中文本并入栈顶。
+- 快捷键录制：设置中直接按键录制，立即生效；冲突时自动回退旧快捷键。
+- 桌面模式：支持嵌入桌面、锁定位置、鼠标穿透（`Ctrl+Shift+Z` 快速切换）。
+- WebDAV 同步：支持手动同步和定时同步（默认每 60 分钟）。
+- 仅新增通知：只有“新增待办”会触发系统通知，其他操作静默。
 
 ## 技术栈
 
-- Electron（桌面壳，负责全局热键、窗口控制、开机自启、文件系统）
-- React + TypeScript（渲染层）
-- Tailwind CSS（玻璃化 UI 与动效）
-- dnd-kit（拖拽排序）
-- WebDAV（局域网/NAS 同步）
+- Electron
+- React + TypeScript
+- Tailwind CSS
+- dnd-kit
+- WebDAV SDK
 
 ## 项目结构
 
@@ -16,105 +28,109 @@
 .
 ├─ src
 │  ├─ main
-│  │  ├─ main.ts          # 主进程：窗口、IPC、热键、文件监听、同步
-│  │  ├─ markdown.ts      # Markdown Task 解析/序列化
-│  │  ├─ storage.ts       # 本地文件与设置持久化
-│  │  └─ sync.ts          # WebDAV 同步服务
+│  │  ├─ main.ts        # 主进程：窗口、IPC、热键、同步调度
+│  │  ├─ markdown.ts    # Markdown Task 解析与序列化
+│  │  ├─ storage.ts     # 本地文件与设置持久化
+│  │  └─ sync.ts        # WebDAV 同步服务
 │  ├─ preload
-│  │  └─ preload.ts       # 安全桥接 API
+│  │  └─ preload.ts     # 安全桥接 API
 │  ├─ renderer
-│  │  ├─ App.tsx          # 主界面
-│  │  ├─ index.css        # Tailwind 与全局样式
-│  │  ├─ main.tsx         # 渲染入口
-│  │  ├─ env.d.ts         # 渲染端类型声明
+│  │  ├─ App.tsx
+│  │  ├─ index.css
 │  │  └─ components
-│  │     └─ SortableTaskItem.tsx
 │  └─ shared
-│     └─ types.ts         # 主渲染共享类型
+│     └─ types.ts
 ├─ package.json
-├─ vite.config.ts
-├─ tailwind.config.js
-├─ postcss.config.js
-└─ tsconfig.json
+└─ README.md
 ```
 
-## 初始化与运行
+## 快速开始
 
-1. 安装依赖
+### 1. 环境要求
+
+- Node.js 18+（建议 Node.js 22 LTS）
+- npm 9+
+- Windows 10/11
+
+### 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-2. 开发运行（Electron + React 热更新）
+### 3. 开发运行
 
 ```bash
 npm run dev
 ```
 
-3. 构建产物
+### 4. 生产构建
 
 ```bash
 npm run build
 ```
 
-4. 打包 Windows 安装包（NSIS）
+## 打包发布
+
+### 安装版（NSIS）
 
 ```bash
 npm run dist
 ```
 
-安装包输出目录：`release/`
+### 便携版（Portable EXE）
 
-## 功能说明
+```bash
+npm run dist:portable
+```
 
-### 1) 无边框/透明 + 桌面模式
+打包输出目录：`release/`
 
-- 窗口为 `frameless + transparent`
-- 支持「始终置顶」
-- 支持「嵌入桌面模式」（通过窗口策略避免 Win+D 后长期消失，属于 Electron 侧近似实现）
+## 使用说明
 
-### 2) 全局热键抓取
+### 任务录入与管理
 
-- 默认热键：`CommandOrControl+Shift+A`
-- 热键触发后调用系统 SendKeys 发送 `Ctrl+C`，再读取剪贴板
-- 自动转成 Markdown Task，并插入栈顶（LIFO）
+- 输入框回车或点击“添加”，新任务会插入到列表顶端（LIFO）。
+- 任务支持编辑、删除、勾选完成、从已完成回退。
+- 拖拽句柄可调整待办优先级，排序结果会写回 Markdown 物理顺序。
 
-### 3) 状态流转
+### 全局热键抓取
 
-- 待办区与已完成折叠区分离
-- 勾选后进入已完成区（灰色 + 删除线）
-- 在已完成区取消勾选后回到主列表底部
+- 默认热键：`Ctrl + Shift + A`
+- 设置面板可“按键录制”快捷键，无需手动输入。
+- 录制后立即生效；如果新热键被占用，会自动回退到旧热键。
+- 触发后会尝试复制当前选中文本并生成待办，插入栈顶。
 
-### 4) 拖拽排序
+### 桌面模式
 
-- 主列表支持拖拽手柄排序
-- 排序后全量重写到底层 `todo.md`，保证物理顺序一致
+- 开启“嵌入桌面”后，会自动关闭“始终置顶”。
+- 可选“锁定位置”防止误拖动。
+- 可选“鼠标穿透”，并可用 `Ctrl + Shift + Z` 快速切换穿透状态。
 
-### 5) 本地存储 + WebDAV
+### 本地文件
 
-- 默认文件：`文档/ApexTodo/todo.md`
-- 监听 `todo.md` 外部修改并热更新
-- 支持 WebDAV 地址/账号/密码/远程路径/同步间隔配置
-- 可手动立即同步，也可后台定时同步
+- 默认待办文件：`文档/ApexTodo/todo.md`
+- 设置中可直接选择“待办文件夹”，程序会自动使用该目录下的 `todo.md`。
+- 外部编辑 `todo.md` 后，界面会自动热更新。
 
-## 常见问题
+### WebDAV 同步
 
-1. 热键触发后没抓到文本
-- 先在目标应用中真正选中文本，再按热键。
-- 某些高权限窗口（管理员权限）可能拦截普通权限发送键。
-
-2. WebDAV 同步失败
-- 检查 URL 是否包含正确路径（如 `/dav`）。
-- 检查远程路径是否有写权限（如 `/todo.md`）。
-
-3. 开机自启不生效
-- 保存设置后重启一次应用。
-- 某些系统策略会拦截开机启动项。
+- 可配置 `URL / 用户名 / 密码 / 远端路径`。
+- 支持手动“立即同步”。
+- 支持后台定时同步，默认间隔 60 分钟（可自定义，单位分钟）。
 
 ## Markdown 格式示例
 
 ```markdown
-- [ ] 修复同步冲突处理 (2026-03-24 11:00)
-- [x] 完成 UI 动效微调 (2026-03-24 10:20)
+- [ ] 修复同步冲突处理 (2026-03-26 10:30)
+- [x] 完成桌面模式联调 (2026-03-26 09:10)
 ```
+
+## 已知说明
+
+- 全局抓取依赖系统复制行为，某些高权限窗口可能无法抓取。
+- 桌面模式是 Electron 下的近似实现，不是系统底层壁纸层嵌入。
+
+## 开源协议
+
+MIT License
