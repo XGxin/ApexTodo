@@ -14,6 +14,13 @@ export interface WebDavConfig {
   intervalMinutes: number;
 }
 
+export interface WindowBoundsState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface AppSettings {
   todoFilePath: string;
   globalShortcut: string;
@@ -23,6 +30,7 @@ export interface AppSettings {
   desktopMouseThrough: boolean;
   launchAtStartup: boolean;
   windowOpacity: number;
+  windowBounds?: WindowBoundsState;
   webdav: WebDavConfig;
 }
 

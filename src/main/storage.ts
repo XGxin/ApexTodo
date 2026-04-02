@@ -23,6 +23,7 @@ function defaultSettings(): AppSettings {
     desktopMouseThrough: false,
     launchAtStartup: false,
     windowOpacity: 0.96,
+    windowBounds: undefined,
     webdav: {
       enabled: false,
       url: '',

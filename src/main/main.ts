@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notific
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { AppSettings, AppState, CaptureResult, TodoItem, WebDavConfig } from '../shared/types';
+import { AppSettings, AppState, CaptureResult, TodoItem, WebDavConfig, WindowBoundsState } from '../shared/types';
 import { createTaskFromText } from './markdown';
 import { StorageService } from './storage';
 import { WebDavSyncService } from './sync';
@@ -16,6 +16,7 @@ let settings: AppSettings;
 let tasks: TodoItem[] = [];
 let lastSyncTime: string | undefined;
 let syncMessage: string | undefined;
+let saveWindowBoundsTimer: NodeJS.Timeout | null = null;
 
 const storage = new StorageService((nextTasks) => {
   tasks = normalizeTaskOrder(nextTasks);
@@ -303,8 +304,78 @@ function getSafeWindowBounds() {
   return { x, y, width, height };
 }
 
+function normalizeWindowBounds(bounds?: WindowBoundsState) {
+  if (!bounds) {
+    return null;
+  }
+
+  const fallback = getSafeWindowBounds();
+  const rawWidth = Number(bounds.width);
+  const rawHeight = Number(bounds.height);
+  const rawX = Number(bounds.x);
+  const rawY = Number(bounds.y);
+
+  if (![rawWidth, rawHeight, rawX, rawY].every(Number.isFinite)) {
+    return null;
+  }
+
+  const probe = {
+    x: Math.round(rawX),
+    y: Math.round(rawY),
+    width: Math.max(360, Math.round(rawWidth)),
+    height: Math.max(560, Math.round(rawHeight))
+  };
+
+  const display = screen.getDisplayMatching(probe);
+  const workArea = display.workArea;
+  const width = Math.min(probe.width, workArea.width);
+  const height = Math.min(probe.height, workArea.height);
+  const maxX = workArea.x + Math.max(0, workArea.width - width);
+  const maxY = workArea.y + Math.max(0, workArea.height - height);
+
+  return {
+    x: Math.min(Math.max(probe.x, workArea.x), maxX),
+    y: Math.min(Math.max(probe.y, workArea.y), maxY),
+    width: width || fallback.width,
+    height: height || fallback.height
+  };
+}
+
+function getLaunchWindowBounds() {
+  return normalizeWindowBounds(settings.windowBounds) ?? getSafeWindowBounds();
+}
+
+function persistWindowBoundsNow() {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized() || mainWindow.isMaximized()) {
+    return;
+  }
+
+  const nextBounds = normalizeWindowBounds(mainWindow.getBounds());
+  if (!nextBounds) {
+    return;
+  }
+
+  settings.windowBounds = nextBounds;
+  void storage.saveSettings(settings);
+}
+
+function scheduleSaveWindowBounds() {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized() || mainWindow.isMaximized()) {
+    return;
+  }
+
+  if (saveWindowBoundsTimer) {
+    clearTimeout(saveWindowBoundsTimer);
+  }
+
+  saveWindowBoundsTimer = setTimeout(() => {
+    persistWindowBoundsNow();
+    saveWindowBoundsTimer = null;
+  }, 180);
+}
+
 function createWindow(startHidden: boolean) {
-  const bounds = getSafeWindowBounds();
+  const bounds = getLaunchWindowBounds();
   const enableTransparentWindow = !app.isPackaged;
 
   mainWindow = new BrowserWindow({
@@ -339,6 +410,18 @@ function createWindow(startHidden: boolean) {
         }
       }, 60);
     }
+  });
+
+  mainWindow.on('move', () => {
+    scheduleSaveWindowBounds();
+  });
+
+  mainWindow.on('resize', () => {
+    scheduleSaveWindowBounds();
+  });
+
+  mainWindow.on('close', () => {
+    persistWindowBoundsNow();
   });
 
   mainWindow.once('ready-to-show', () => {
@@ -578,6 +661,7 @@ async function bootstrap() {
   settings.webdav = normalizeWebdavConfig(settings.webdav);
   settings.desktopLockPosition = typeof settings.desktopLockPosition === 'boolean' ? settings.desktopLockPosition : true;
   settings.desktopMouseThrough = typeof settings.desktopMouseThrough === 'boolean' ? settings.desktopMouseThrough : false;
+  settings.windowBounds = normalizeWindowBounds(settings.windowBounds) ?? undefined;
   if (settings.desktopPinned) {
     settings.alwaysOnTop = false;
   } else {
@@ -625,6 +709,11 @@ if (!gotSingleInstanceLock) {
 }
 
 app.on('will-quit', () => {
+  if (saveWindowBoundsTimer) {
+    clearTimeout(saveWindowBoundsTimer);
+    saveWindowBoundsTimer = null;
+  }
+  persistWindowBoundsNow();
   globalShortcut.unregisterAll();
   storage.unwatchTodoFile();
   syncService.stop();
