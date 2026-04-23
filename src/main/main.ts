@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, screen } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, screen, Tray } from 'electron';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -17,6 +17,7 @@ let tasks: TodoItem[] = [];
 let lastSyncTime: string | undefined;
 let syncMessage: string | undefined;
 let saveWindowBoundsTimer: NodeJS.Timeout | null = null;
+let tray: Tray | null = null;
 
 const storage = new StorageService((nextTasks) => {
   tasks = normalizeTaskOrder(nextTasks);
@@ -110,6 +111,7 @@ function currentState(): AppState {
 }
 
 function broadcastState() {
+  updateTrayMenu();
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
@@ -165,6 +167,26 @@ function showMainWindow() {
   mainWindow.focus();
 }
 
+async function setDesktopMouseThrough(nextValue: boolean, openSettingsAfterShow = false) {
+  settings.desktopMouseThrough = nextValue;
+  await storage.saveSettings(settings);
+  applyWindowMode();
+
+  if (!nextValue) {
+    showMainWindow();
+    if (openSettingsAfterShow) {
+      mainWindow?.webContents.send('window:open-settings-panel');
+    }
+  }
+
+  const text = nextValue
+    ? 'Desktop mode: mouse passthrough ON (tray or Ctrl+Shift+Z to disable)'
+    : 'Desktop mode: mouse passthrough OFF';
+  const at = new Date().toISOString();
+  mainWindow?.webContents.send('task:saved-toast', { text, at });
+  broadcastState();
+}
+
 function applyWindowMode() {
   if (!mainWindow) {
     return;
@@ -207,20 +229,7 @@ function registerGlobalHotkey() {
     if (!settings.desktopPinned) {
       return;
     }
-
-    settings.desktopMouseThrough = !settings.desktopMouseThrough;
-    await storage.saveSettings(settings);
-    applyWindowMode();
-    if (!settings.desktopMouseThrough) {
-      showMainWindow();
-    }
-
-    const text = settings.desktopMouseThrough
-      ? 'Desktop mode: mouse passthrough ON (Ctrl+Shift+Z to disable)'
-      : 'Desktop mode: mouse passthrough OFF';
-    const at = new Date().toISOString();
-    mainWindow?.webContents.send('task:saved-toast', { text, at });
-    broadcastState();
+    await setDesktopMouseThrough(!settings.desktopMouseThrough);
   });
 
   if (!captureRegistered) {
@@ -238,6 +247,107 @@ function registerGlobalHotkey() {
   syncMessage = `Hotkeys active: ${settings.globalShortcut} (passthrough: Ctrl+Shift+Z)`;
   broadcastState();
   return true;
+}
+
+function createTrayIcon() {
+  const size = 32;
+  const buffer = Buffer.alloc(size * size * 4, 0);
+
+  const setPixel = (x: number, y: number, r: number, g: number, b: number, a = 255) => {
+    if (x < 0 || y < 0 || x >= size || y >= size) {
+      return;
+    }
+
+    const offset = (y * size + x) * 4;
+    buffer[offset] = b;
+    buffer[offset + 1] = g;
+    buffer[offset + 2] = r;
+    buffer[offset + 3] = a;
+  };
+
+  for (let y = 4; y < 28; y += 1) {
+    for (let x = 4; x < 28; x += 1) {
+      setPixel(x, y, 56, 189, 248, 255);
+    }
+  }
+
+  for (let y = 15; y < 24; y += 1) {
+    const x = y - 7;
+    setPixel(x, y, 255, 255, 255, 255);
+    setPixel(x + 1, y, 255, 255, 255, 255);
+  }
+
+  const checkPixels = [
+    [12, 21], [13, 20], [14, 19], [15, 18],
+    [16, 17], [17, 16], [18, 15], [19, 14],
+    [20, 13], [21, 12], [22, 11], [23, 10]
+  ];
+
+  for (const [x, y] of checkPixels) {
+    setPixel(x, y, 255, 255, 255, 255);
+    setPixel(x, y + 1, 255, 255, 255, 255);
+  }
+
+  return nativeImage.createFromBitmap(buffer, { width: size, height: size }).resize({ width: 16, height: 16 });
+}
+
+function updateTrayMenu() {
+  if (!tray) {
+    return;
+  }
+
+  const trayMenu = Menu.buildFromTemplate([
+    {
+      label: '\u663E\u793A\u7A97\u53E3',
+      click: () => {
+        void setDesktopMouseThrough(false);
+      }
+    },
+    {
+      label: '\u6253\u5F00\u8BBE\u7F6E',
+      click: () => {
+        void setDesktopMouseThrough(false, true);
+      }
+    },
+    {
+      label: settings.desktopMouseThrough
+        ? '\u5173\u95ED\u9F20\u6807\u7A7F\u900F'
+        : '\u5F00\u542F\u9F20\u6807\u7A7F\u900F',
+      enabled: settings.desktopPinned,
+      click: () => {
+        if (!settings.desktopPinned) {
+          return;
+        }
+        void setDesktopMouseThrough(!settings.desktopMouseThrough);
+      }
+    },
+    {
+      type: 'separator'
+    },
+    {
+      label: '\u9000\u51FA',
+      click: () => {
+        app.quit();
+      }
+    }
+  ]);
+
+  tray.setToolTip('ApexTodo');
+  tray.setContextMenu(trayMenu);
+}
+
+function ensureTray() {
+
+  if (tray) {
+    updateTrayMenu();
+    return;
+  }
+
+  tray = new Tray(createTrayIcon());
+  tray.on('click', () => {
+    void setDesktopMouseThrough(false);
+  });
+  updateTrayMenu();
 }
 
 async function simulateCopyOnWindows() {
@@ -574,7 +684,7 @@ function setupIpcHandlers() {
     }
 
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: '选择待办文件夹',
+      title: '\u9009\u62E9\u5F85\u529E\u6587\u4EF6\u5939',
       properties: ['openDirectory', 'createDirectory']
     });
 
@@ -675,6 +785,7 @@ async function bootstrap() {
 
   const startHidden = shouldStartHidden();
   createWindow(startHidden);
+  ensureTray();
   applyLoginItemSetting();
   registerGlobalHotkey();
   syncService.start();
@@ -717,6 +828,8 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   storage.unwatchTodoFile();
   syncService.stop();
+  tray?.destroy();
+  tray = null;
 });
 
 app.on('window-all-closed', () => {

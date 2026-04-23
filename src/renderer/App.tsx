@@ -131,9 +131,14 @@ export default function App() {
       setTimeout(() => setToastText(''), 1300);
     });
 
+    const offOpenSettings = window.todoApi.onOpenSettingsPanel(() => {
+      setSettingsOpen(true);
+    });
+
     return () => {
       offState();
       offToast();
+      offOpenSettings();
     };
   }, [settingsOpen]);
 
@@ -321,7 +326,7 @@ export default function App() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_12%,rgba(251,191,36,0.2),transparent_40%),radial-gradient(circle_at_88%_88%,rgba(56,189,248,0.2),transparent_40%),linear-gradient(160deg,#020617,#0f172a_40%,#111827_80%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:18px_18px]" />
 
-      <div className="relative z-10 flex h-full flex-col p-3">
+      <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
         <div className="mb-2 h-7 rounded-lg" style={dragStyle} />
 
         <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5" style={noDragStyle}>
@@ -362,8 +367,8 @@ export default function App() {
           </button>
         </section>
 
-        <section className="min-h-0 flex-1 rounded-2xl border border-white/15 bg-black/25 p-2.5">
-          <div className="max-h-[58%] space-y-2 overflow-auto pr-1">
+        <section className="min-h-0 flex flex-1 flex-col rounded-2xl border border-white/15 bg-black/25 p-2.5">
+          <div className="min-h-0 flex-1 space-y-2 overflow-auto pr-1">
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => void onDragEnd(event)}>
               <SortableContext items={openTasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
                 {openTasks.map((task) => (
@@ -381,14 +386,18 @@ export default function App() {
             {openTasks.length === 0 && <div className="empty-box">暂无待办，先添加一条任务</div>}
           </div>
 
-          <div className="mt-3 border-t border-white/15 pt-2">
+          <div className="mt-3 flex-shrink-0 border-t border-white/15 pt-2">
             <button className="fold-btn" onClick={() => setCompletedOpen((v) => !v)}>
               <span>已完成（{completedTasks.length}）</span>
               <span className={`transition-transform duration-300 ${completedOpen ? 'rotate-180' : ''}`}>⌄</span>
             </button>
 
-            <div className={`overflow-hidden transition-all duration-300 ${completedOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'}`}>
-              <div className="mt-2 space-y-2 overflow-auto pr-1">
+            <div
+              className={`overflow-hidden transition-all duration-300 ${
+                completedOpen ? 'mt-2 max-h-[40vh] opacity-100' : 'max-h-0 opacity-0'
+              }`}
+            >
+              <div className="max-h-[calc(40vh-0.5rem)] space-y-2 overflow-auto pr-1">
                 {completedTasks.map((task: TodoItem) => (
                   <div key={task.id} className="done-card">
                     <div className="min-w-0 flex-1">
@@ -417,7 +426,7 @@ export default function App() {
               <button className="ui-btn" onClick={() => setSettingsOpen(false)}>关闭</button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className="option-item">
                 <input
                   type="checkbox"
@@ -506,7 +515,7 @@ export default function App() {
 
               <input value={settingsDraft.webdav.url} onChange={(event) => updateWebdav('url', event.target.value)} className="neo-input" placeholder="WebDAV 地址" />
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input value={settingsDraft.webdav.username} onChange={(event) => updateWebdav('username', event.target.value)} className="neo-input" placeholder="用户名" />
                 <input value={settingsDraft.webdav.password} onChange={(event) => updateWebdav('password', event.target.value)} className="neo-input" placeholder="密码" type="password" />
                 <input value={settingsDraft.webdav.remotePath} onChange={(event) => updateWebdav('remotePath', event.target.value)} className="neo-input" placeholder="远端路径 /todo.md" />
@@ -524,7 +533,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <button className="action-btn flex-1 bg-cyan-300 text-slate-900 hover:bg-cyan-200" onClick={() => void saveSettings()}>
                 保存设置
               </button>

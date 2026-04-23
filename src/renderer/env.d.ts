@@ -21,6 +21,7 @@ declare global {
       closeWindow: () => Promise<void>;
       onStateUpdated: (handler: (state: AppState) => void) => () => void;
       onSavedToast: (handler: (payload: SaveToastPayload) => void) => () => void;
+      onOpenSettingsPanel: (handler: () => void) => () => void;
     };
   }
 }

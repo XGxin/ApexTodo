@@ -28,6 +28,11 @@ const api = {
     const wrapped = (_event: Electron.IpcRendererEvent, payload: SaveToastPayload) => handler(payload);
     ipcRenderer.on('task:saved-toast', wrapped);
     return () => ipcRenderer.removeListener('task:saved-toast', wrapped);
+  },
+  onOpenSettingsPanel: (handler: () => void) => {
+    const wrapped = () => handler();
+    ipcRenderer.on('window:open-settings-panel', wrapped);
+    return () => ipcRenderer.removeListener('window:open-settings-panel', wrapped);
   }
 };
 

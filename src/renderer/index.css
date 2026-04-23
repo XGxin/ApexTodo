@@ -143,8 +143,13 @@ body {
   position: absolute;
   left: 0.75rem;
   right: 0.75rem;
+  top: 3.9rem;
   bottom: 0.75rem;
   z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
   border: 1px solid rgba(56, 189, 248, 0.25);
   border-radius: 1rem;
   background: rgba(2, 6, 23, 0.95);
@@ -156,6 +161,7 @@ body {
 .option-item {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 0.45rem;
   border-radius: 0.72rem;
   background: rgba(255, 255, 255, 0.04);

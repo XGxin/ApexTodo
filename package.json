@@ -1,6 +1,6 @@
 {
   "name": "apex-todo",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ApexTodo local markdown todo desktop widget",
   "main": "dist-electron/main.js",
   "author": "you",
@@ -50,6 +50,11 @@
     "appId": "com.apextodo.app",
     "productName": "ApexTodo",
     "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "directories": {
       "output": "release"
     },
