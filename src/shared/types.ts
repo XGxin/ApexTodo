@@ -28,6 +28,7 @@ export interface AppSettings {
   desktopPinned: boolean;
   desktopLockPosition: boolean;
   desktopMouseThrough: boolean;
+  showCodexUsage: boolean;
   launchAtStartup: boolean;
   windowOpacity: number;
   windowBounds?: WindowBoundsState;
@@ -54,4 +55,19 @@ export type ReorderPayload = {
 export interface CaptureResult {
   ok: boolean;
   message: string;
+}
+
+export interface CodexUsageWindow {
+  usedPercent: number;
+  resetAt: string;
+  windowSeconds: number;
+}
+
+export interface CodexUsage {
+  status: 'ready' | 'unavailable' | 'error';
+  planType?: string;
+  fiveHour?: CodexUsageWindow;
+  weekly?: CodexUsageWindow;
+  fetchedAt?: string;
+  message?: string;
 }

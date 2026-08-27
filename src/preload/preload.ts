@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { AppSettings, AppState, CaptureResult, SaveToastPayload } from '../shared/types';
+import { AppSettings, AppState, CaptureResult, CodexUsage, SaveToastPayload } from '../shared/types';
 
 const api = {
   getState: () => ipcRenderer.invoke('app:get-state') as Promise<AppState>,
+  getCodexUsage: () => ipcRenderer.invoke('codex:get-usage') as Promise<CodexUsage>,
   addTask: (text: string) => ipcRenderer.invoke('task:add', text) as Promise<AppState>,
   toggleTask: (taskId: string, completed: boolean) => ipcRenderer.invoke('task:toggle', taskId, completed) as Promise<AppState>,
   deleteTask: (taskId: string) => ipcRenderer.invoke('task:delete', taskId) as Promise<AppState>,

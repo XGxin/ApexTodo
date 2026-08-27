@@ -21,6 +21,7 @@ function defaultSettings(): AppSettings {
     desktopPinned: false,
     desktopLockPosition: true,
     desktopMouseThrough: false,
+    showCodexUsage: false,
     launchAtStartup: false,
     windowOpacity: 0.96,
     windowBounds: undefined,

@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { AppSettings, AppState, CaptureResult, TodoItem, WebDavConfig, WindowBoundsState } from '../shared/types';
 import { createTaskFromText } from './markdown';
+import { getCodexUsage } from './codexUsage';
 import { StorageService } from './storage';
 import { WebDavSyncService } from './sync';
 
@@ -211,7 +212,7 @@ function applyWindowMode() {
   }
 
   mainWindow.setVisibleOnAllWorkspaces(false);
-  mainWindow.setSkipTaskbar(false);
+  mainWindow.setSkipTaskbar(true);
   mainWindow.setMinimizable(true);
   mainWindow.setMaximizable(true);
   mainWindow.setResizable(true);
@@ -500,6 +501,7 @@ function createWindow(startHidden: boolean) {
     backgroundColor: enableTransparentWindow ? '#00000000' : '#0f172a',
     autoHideMenuBar: true,
     hasShadow: !enableTransparentWindow,
+    skipTaskbar: true,
     show: !startHidden,
     title: 'ApexTodo',
     webPreferences: {
@@ -570,6 +572,7 @@ function createWindow(startHidden: boolean) {
 
 function setupIpcHandlers() {
   ipcMain.handle('app:get-state', async () => currentState());
+  ipcMain.handle('codex:get-usage', async () => getCodexUsage());
 
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize();
@@ -706,12 +709,15 @@ function setupIpcHandlers() {
       typeof partial.windowOpacity === 'number' ? normalizeOpacity(partial.windowOpacity) : settings.windowOpacity;
 
     const normalizedWebdav = normalizeWebdavConfig(mergeWebdav(settings.webdav, partial.webdav));
+    const normalizedShowCodexUsage =
+      typeof partial.showCodexUsage === 'boolean' ? partial.showCodexUsage : settings.showCodexUsage;
 
     settings = {
       ...settings,
       ...partial,
       globalShortcut: normalizedShortcut,
       windowOpacity: normalizedOpacity,
+      showCodexUsage: normalizedShowCodexUsage,
       webdav: normalizedWebdav
     };
 
@@ -771,6 +777,7 @@ async function bootstrap() {
   settings.webdav = normalizeWebdavConfig(settings.webdav);
   settings.desktopLockPosition = typeof settings.desktopLockPosition === 'boolean' ? settings.desktopLockPosition : true;
   settings.desktopMouseThrough = typeof settings.desktopMouseThrough === 'boolean' ? settings.desktopMouseThrough : false;
+  settings.showCodexUsage = typeof settings.showCodexUsage === 'boolean' ? settings.showCodexUsage : false;
   settings.windowBounds = normalizeWindowBounds(settings.windowBounds) ?? undefined;
   if (settings.desktopPinned) {
     settings.alwaysOnTop = false;

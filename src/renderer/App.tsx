@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
-import { AppSettings, AppState, TodoItem } from '../shared/types';
+import { AppSettings, AppState, CodexUsage, CodexUsageWindow, TodoItem } from '../shared/types';
 import { SortableTaskItem } from './components/SortableTaskItem';
 
 const defaultSettings: AppSettings = {
@@ -19,6 +19,7 @@ const defaultSettings: AppSettings = {
   desktopPinned: false,
   desktopLockPosition: true,
   desktopMouseThrough: false,
+  showCodexUsage: false,
   launchAtStartup: false,
   windowOpacity: 0.96,
   webdav: {
@@ -98,6 +99,56 @@ function getTodoFolderPath(todoFilePath: string) {
   return todoFilePath.replace(/[\\/][^\\/]+$/, '');
 }
 
+function formatUsageReset(resetAt: string) {
+  return `${dayjs(resetAt).format('MM-DD HH:mm')} 重置`;
+}
+
+function formatCompactUsageReset(usage: CodexUsageWindow) {
+  const pattern = usage.windowSeconds >= 24 * 60 * 60 ? 'MM-DD HH:mm' : 'HH:mm';
+  return `↻ ${dayjs(usage.resetAt).format(pattern)}`;
+}
+
+function TopUsageMetric({
+  label,
+  usage,
+  tone
+}: {
+  label: string;
+  usage: CodexUsageWindow;
+  tone: 'cyan' | 'violet';
+}) {
+  const fillColor =
+    usage.usedPercent >= 90
+      ? 'bg-rose-400'
+      : usage.usedPercent >= 70
+        ? 'bg-amber-300'
+        : tone === 'cyan'
+          ? 'bg-cyan-300'
+          : 'bg-violet-300';
+
+  return (
+    <div
+      className="usage-topbar-metric"
+      role="progressbar"
+      aria-label={`${label}已用`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={usage.usedPercent}
+      title={`${label}已用 ${usage.usedPercent}% · ${formatUsageReset(usage.resetAt)}`}
+    >
+      <span className="usage-topbar-label">{label}</span>
+      <span className="usage-topbar-percent">{usage.usedPercent}%</span>
+      <span className="usage-topbar-reset">{formatCompactUsageReset(usage)}</span>
+      <span className="usage-topbar-track">
+        <span
+          className={`block h-full rounded-full transition-[width] duration-500 ${fillColor}`}
+          style={{ width: `${usage.usedPercent}%` }}
+        />
+      </span>
+    </div>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [newTaskText, setNewTaskText] = useState('');
@@ -108,6 +159,8 @@ export default function App() {
   const [selectingFolder, setSelectingFolder] = useState(false);
   const [toastText, setToastText] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [codexUsage, setCodexUsage] = useState<CodexUsage | null>(null);
+  const [usageRefreshing, setUsageRefreshing] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const dragStyle: CSSProperties = { WebkitAppRegion: 'drag' as never };
@@ -143,6 +196,21 @@ export default function App() {
   }, [settingsOpen]);
 
   useEffect(() => {
+    if (!state?.settings.showCodexUsage) {
+      setCodexUsage(null);
+      setUsageRefreshing(false);
+      return;
+    }
+
+    void refreshCodexUsage();
+    const timer = window.setInterval(() => {
+      void refreshCodexUsage();
+    }, 5 * 60 * 1000);
+
+    return () => window.clearInterval(timer);
+  }, [state?.settings.showCodexUsage]);
+
+  useEffect(() => {
     if (!isCapturingShortcut) {
       return;
     }
@@ -175,6 +243,20 @@ export default function App() {
 
   const openTasks = useMemo(() => state?.tasks.filter((task) => !task.completed) ?? [], [state]);
   const completedTasks = useMemo(() => state?.tasks.filter((task) => task.completed) ?? [], [state]);
+
+  async function refreshCodexUsage() {
+    setUsageRefreshing(true);
+    try {
+      setCodexUsage(await window.todoApi.getCodexUsage());
+    } catch {
+      setCodexUsage({
+        status: 'error',
+        message: '读取 Codex 用量失败'
+      });
+    } finally {
+      setUsageRefreshing(false);
+    }
+  }
 
   async function refreshState() {
     const next = await window.todoApi.getState();
@@ -264,6 +346,7 @@ export default function App() {
       launchAtStartup: settingsDraft.launchAtStartup,
       desktopLockPosition: settingsDraft.desktopLockPosition,
       desktopMouseThrough: settingsDraft.desktopMouseThrough,
+      showCodexUsage: settingsDraft.showCodexUsage,
       windowOpacity: settingsDraft.windowOpacity,
       webdav: settingsDraft.webdav
     });
@@ -329,6 +412,36 @@ export default function App() {
       <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
         <div className="mb-2 h-7 rounded-lg" style={dragStyle} />
 
+        {state?.settings.showCodexUsage && (
+          <div className="usage-topbar" style={dragStyle}>
+            <span className="usage-topbar-title">Codex</span>
+            {codexUsage?.status === 'ready' && codexUsage.fiveHour && codexUsage.weekly ? (
+              <>
+                <TopUsageMetric label="5 小时" usage={codexUsage.fiveHour} tone="cyan" />
+                <TopUsageMetric label="本周" usage={codexUsage.weekly} tone="violet" />
+              </>
+            ) : (
+              <span
+                className={`usage-topbar-status ${codexUsage?.status === 'error' ? 'text-rose-300' : 'text-amber-200'}`}
+                title={codexUsage?.message || '正在读取 Codex 用量'}
+              >
+                {usageRefreshing ? '正在读取…' : codexUsage?.message || '暂无用量'}
+              </span>
+            )}
+            <button
+              type="button"
+              className="usage-refresh-btn"
+              style={noDragStyle}
+              onClick={() => void refreshCodexUsage()}
+              disabled={usageRefreshing}
+              title={codexUsage?.fetchedAt ? `更新于 ${dayjs(codexUsage.fetchedAt).format('HH:mm:ss')}` : '刷新 Codex 用量'}
+              aria-label="刷新 Codex 用量"
+            >
+              <span className={usageRefreshing ? 'inline-block animate-spin' : 'inline-block'}>↻</span>
+            </button>
+          </div>
+        )}
+
         <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5" style={noDragStyle}>
           <button className="icon-btn" style={noDragStyle} onClick={() => setSettingsOpen((v) => !v)} title="设置">
             ⚙
@@ -341,11 +454,11 @@ export default function App() {
           </button>
         </div>
 
-        <div className="mb-2 flex items-center justify-between px-1 text-[11px] text-slate-300">
-          <span>ApexTodo · {dayjs().format('MM-DD HH:mm')}</span>
+        <div className="mb-2 flex min-h-5 items-center justify-between gap-2 px-1 text-[11px] text-slate-300">
+          <span className="flex-shrink-0">ApexTodo · {dayjs().format('MM-DD HH:mm')}</span>
           {state?.settings.desktopPinned && (
-            <span className="rounded-full border border-emerald-300/25 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
-              桌面模式
+            <span className="rounded-full border border-emerald-300/25 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] text-emerald-200">
+              桌面
             </span>
           )}
         </div>
@@ -457,6 +570,14 @@ export default function App() {
                   onChange={(event) => setSettingsDraft((prev) => ({ ...prev, desktopMouseThrough: event.target.checked }))}
                 />
                 桌面模式鼠标穿透（Ctrl+Shift+Z 可切换）
+              </label>
+              <label className="option-item col-span-2">
+                <input
+                  type="checkbox"
+                  checked={settingsDraft.showCodexUsage}
+                  onChange={(event) => setSettingsDraft((prev) => ({ ...prev, showCodexUsage: event.target.checked }))}
+                />
+                显示 Codex 用量（默认关闭）
               </label>
               <label className="option-item col-span-2">
                 <input
