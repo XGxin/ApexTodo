@@ -21,6 +21,8 @@ export interface WindowBoundsState {
   height: number;
 }
 
+export type ThemeMode = 'light' | 'dark' | 'system';
+
 export interface AppSettings {
   todoFilePath: string;
   globalShortcut: string;
@@ -31,6 +33,7 @@ export interface AppSettings {
   showCodexUsage: boolean;
   launchAtStartup: boolean;
   windowOpacity: number;
+  theme: ThemeMode;
   windowBounds?: WindowBoundsState;
   webdav: WebDavConfig;
 }

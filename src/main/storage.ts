@@ -24,6 +24,7 @@ function defaultSettings(): AppSettings {
     showCodexUsage: false,
     launchAtStartup: false,
     windowOpacity: 0.96,
+    theme: 'light',
     windowBounds: undefined,
     webdav: {
       enabled: false,

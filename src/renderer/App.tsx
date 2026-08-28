@@ -1,4 +1,4 @@
-﻿import { CSSProperties, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, useEffect, useMemo, useState } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -9,8 +9,24 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
-import { AppSettings, AppState, CodexUsage, CodexUsageWindow, TodoItem } from '../shared/types';
+import { AppSettings, AppState, CodexUsage, CodexUsageWindow, ThemeMode, TodoItem } from '../shared/types';
 import { SortableTaskItem } from './components/SortableTaskItem';
+import {
+  ApexLogo,
+  CheckIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  CloudIcon,
+  FolderIcon,
+  KeyboardIcon,
+  MinusIcon,
+  MoonIcon,
+  PlusIcon,
+  RefreshIcon,
+  SettingsIcon,
+  SunIcon,
+  TrashIcon
+} from './components/icons';
 
 const defaultSettings: AppSettings = {
   todoFilePath: '',
@@ -22,6 +38,7 @@ const defaultSettings: AppSettings = {
   showCodexUsage: false,
   launchAtStartup: false,
   windowOpacity: 0.96,
+  theme: 'light',
   webdav: {
     enabled: false,
     url: '',
@@ -103,32 +120,15 @@ function formatUsageReset(resetAt: string) {
   return `${dayjs(resetAt).format('MM-DD HH:mm')} 重置`;
 }
 
-function formatCompactUsageReset(usage: CodexUsageWindow) {
-  const pattern = usage.windowSeconds >= 24 * 60 * 60 ? 'MM-DD HH:mm' : 'HH:mm';
-  return `↻ ${dayjs(usage.resetAt).format(pattern)}`;
-}
+function TopUsageMetric({ label, usage }: { label: string; usage: CodexUsageWindow }) {
+  const tone =
+    usage.usedPercent >= 90 ? 'var(--danger)' : usage.usedPercent >= 70 ? '#f0a020' : 'var(--accent)';
 
-function TopUsageMetric({
-  label,
-  usage,
-  tone
-}: {
-  label: string;
-  usage: CodexUsageWindow;
-  tone: 'cyan' | 'violet';
-}) {
-  const fillColor =
-    usage.usedPercent >= 90
-      ? 'bg-rose-400'
-      : usage.usedPercent >= 70
-        ? 'bg-amber-300'
-        : tone === 'cyan'
-          ? 'bg-cyan-300'
-          : 'bg-violet-300';
+  const resetText = dayjs(usage.resetAt).format(usage.windowSeconds >= 24 * 60 * 60 ? 'MM-DD' : 'HH:mm');
 
   return (
     <div
-      className="usage-topbar-metric"
+      className="flex min-w-0 flex-1 items-center gap-1.5"
       role="progressbar"
       aria-label={`${label}已用`}
       aria-valuemin={0}
@@ -136,17 +136,38 @@ function TopUsageMetric({
       aria-valuenow={usage.usedPercent}
       title={`${label}已用 ${usage.usedPercent}% · ${formatUsageReset(usage.resetAt)}`}
     >
-      <span className="usage-topbar-label">{label}</span>
-      <span className="usage-topbar-percent">{usage.usedPercent}%</span>
-      <span className="usage-topbar-reset">{formatCompactUsageReset(usage)}</span>
-      <span className="usage-topbar-track">
+      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: tone }} />
+      <span className="flex-shrink-0 text-[11px] font-medium text-[var(--text-2)]">{label}</span>
+      <span className="h-1 w-9 flex-shrink-0 overflow-hidden rounded-full bg-[var(--line-strong)]">
         <span
-          className={`block h-full rounded-full transition-[width] duration-500 ${fillColor}`}
-          style={{ width: `${usage.usedPercent}%` }}
+          className="block h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${usage.usedPercent}%`, background: tone }}
         />
       </span>
+      <span className="flex-shrink-0 text-[11px] font-semibold tabular-nums text-[var(--text)]">
+        {usage.usedPercent}%
+      </span>
+      <span className="flex-shrink-0 text-[10px] font-medium tabular-nums text-[var(--text-2)]">{resetText}</span>
     </div>
   );
+}
+
+function useSystemDark() {
+  const [dark, setDark] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
+  );
+
+  useEffect(() => {
+    if (!window.matchMedia) {
+      return;
+    }
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (event: MediaQueryListEvent) => setDark(event.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  return dark;
 }
 
 export default function App() {
@@ -163,8 +184,12 @@ export default function App() {
   const [usageRefreshing, setUsageRefreshing] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-  const dragStyle: CSSProperties = { WebkitAppRegion: 'drag' as never };
-  const noDragStyle: CSSProperties = { WebkitAppRegion: 'no-drag' as never };
+  const dragStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
+  const noDragStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
+
+  const systemDark = useSystemDark();
+  const themeMode: ThemeMode = state?.settings.theme ?? 'light';
+  const effectiveTheme = themeMode === 'system' ? (systemDark ? 'dark' : 'light') : themeMode;
 
   useEffect(() => {
     void window.todoApi.getState().then((appState) => {
@@ -285,30 +310,52 @@ export default function App() {
     setTimeout(() => setToastText(''), 1600);
   }
 
+  function notifyError(message: string) {
+    setToastText(message);
+    setTimeout(() => setToastText(''), 1800);
+  }
+
   async function addTask() {
     const text = newTaskText.trim();
     if (!text) {
       return;
     }
 
-    const next = await window.todoApi.addTask(text);
-    setState(next);
-    setNewTaskText('');
+    try {
+      const next = await window.todoApi.addTask(text);
+      setState(next);
+      setNewTaskText('');
+    } catch {
+      notifyError('添加失败，请检查待办文件是否可写');
+      void refreshState();
+    }
   }
 
   async function toggleTask(taskId: string, completed: boolean) {
-    const next = await window.todoApi.toggleTask(taskId, completed);
-    setState(next);
+    try {
+      setState(await window.todoApi.toggleTask(taskId, completed));
+    } catch {
+      notifyError('操作失败，请稍后重试');
+      void refreshState();
+    }
   }
 
   async function deleteTask(taskId: string) {
-    const next = await window.todoApi.deleteTask(taskId);
-    setState(next);
+    try {
+      setState(await window.todoApi.deleteTask(taskId));
+    } catch {
+      notifyError('删除失败，请稍后重试');
+      void refreshState();
+    }
   }
 
   async function updateTaskText(taskId: string, text: string) {
-    const next = await window.todoApi.updateTaskText(taskId, text);
-    setState(next);
+    try {
+      setState(await window.todoApi.updateTaskText(taskId, text));
+    } catch {
+      notifyError('保存失败，请稍后重试');
+      void refreshState();
+    }
   }
 
   async function onDragEnd(event: DragEndEvent) {
@@ -335,8 +382,13 @@ export default function App() {
       };
     });
 
-    const next = await window.todoApi.reorderOpenTasks(reordered.map((task) => task.id));
-    setState(next);
+    try {
+      const next = await window.todoApi.reorderOpenTasks(reordered.map((task) => task.id));
+      setState(next);
+    } catch {
+      notifyError('排序保存失败');
+      void refreshState();
+    }
   }
 
   async function saveSettings() {
@@ -348,6 +400,7 @@ export default function App() {
       desktopMouseThrough: settingsDraft.desktopMouseThrough,
       showCodexUsage: settingsDraft.showCodexUsage,
       windowOpacity: settingsDraft.windowOpacity,
+      theme: settingsDraft.theme,
       webdav: settingsDraft.webdav
     });
 
@@ -383,6 +436,12 @@ export default function App() {
     await refreshState();
   }
 
+  async function changeTheme(theme: ThemeMode) {
+    const next = await window.todoApi.updateSettings({ theme });
+    setState(next);
+    setSettingsDraft((prev) => ({ ...prev, theme: next.settings.theme }));
+  }
+
   async function runSync() {
     setSyncing(true);
     try {
@@ -394,8 +453,7 @@ export default function App() {
     }
   }
 
-  function updateWebdav<K extends keyof AppSettings['webdav']>(key: K, value: AppSettings['webdav'][K]) {
-    setSettingsDraft((prev) => ({
+  function updateWebdav<K extends keyof AppSettings['webdav']>(key: K, value: AppSettings['webdav'][K]) {    setSettingsDraft((prev) => ({
       ...prev,
       webdav: {
         ...prev.webdav,
@@ -405,85 +463,101 @@ export default function App() {
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden border border-white/20 text-slate-100 shadow-[0_20px_48px_rgba(2,6,23,0.45)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_12%,rgba(251,191,36,0.2),transparent_40%),radial-gradient(circle_at_88%_88%,rgba(56,189,248,0.2),transparent_40%),linear-gradient(160deg,#020617,#0f172a_40%,#111827_80%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:18px_18px]" />
-
-      <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
-        <div className="mb-2 h-7 rounded-lg" style={dragStyle} />
+    <div
+      data-theme={effectiveTheme}
+      style={{ colorScheme: effectiveTheme }}
+      className="relative h-screen w-screen overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--bg)] text-[var(--text)]"
+    >
+      <div className="relative z-10 flex h-full min-h-0 flex-col">
+        {/* 顶部品牌栏（可拖拽） */}
+        <header className="flex h-10 flex-shrink-0 items-center justify-between px-3" style={dragStyle}>
+          <div className="flex items-center gap-2">
+            <ApexLogo size={20} />
+            <span className="text-[13px] font-semibold tracking-wide">ApexTodo</span>
+            {state?.settings.desktopPinned && (
+              <span className="h-2 w-2 rounded-full bg-[var(--success)]" title="已固定到桌面" />
+            )}
+          </div>
+          <div className="flex items-center gap-0.5" style={noDragStyle}>
+            <button
+              className="ghost-icon"
+              onClick={() => void changeTheme(effectiveTheme === 'dark' ? 'light' : 'dark')}
+              title={effectiveTheme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+            >
+              {effectiveTheme === 'dark' ? <SunIcon size={15} /> : <MoonIcon size={15} />}
+            </button>
+            <button className="ghost-icon" onClick={() => setSettingsOpen((v) => !v)} title="设置">
+              <SettingsIcon size={15} />
+            </button>
+            <button className="ghost-icon" onClick={() => void window.todoApi.minimizeWindow()} title="最小化">
+              <MinusIcon size={15} />
+            </button>
+            <button className="ghost-icon danger" onClick={() => void window.todoApi.closeWindow()} title="退出">
+              <CloseIcon size={15} />
+            </button>
+          </div>
+        </header>
 
         {state?.settings.showCodexUsage && (
-          <div className="usage-topbar" style={dragStyle}>
-            <span className="usage-topbar-title">Codex</span>
+          <div className="mx-3 mb-1.5 flex items-center gap-2">
             {codexUsage?.status === 'ready' && codexUsage.fiveHour && codexUsage.weekly ? (
               <>
-                <TopUsageMetric label="5 小时" usage={codexUsage.fiveHour} tone="cyan" />
-                <TopUsageMetric label="本周" usage={codexUsage.weekly} tone="violet" />
+                <TopUsageMetric label="5 小时" usage={codexUsage.fiveHour} />
+                <TopUsageMetric label="本周" usage={codexUsage.weekly} />
               </>
             ) : (
-              <span
-                className={`usage-topbar-status ${codexUsage?.status === 'error' ? 'text-rose-300' : 'text-amber-200'}`}
+              <p
+                className={`min-w-0 flex-1 truncate text-[11px] ${codexUsage?.status === 'error' ? 'text-rose-500' : 'text-[var(--text-2)]'}`}
                 title={codexUsage?.message || '正在读取 Codex 用量'}
               >
-                {usageRefreshing ? '正在读取…' : codexUsage?.message || '暂无用量'}
-              </span>
+                {usageRefreshing ? '正在读取 Codex 用量…' : codexUsage?.message || 'Codex 用量不可用'}
+              </p>
             )}
             <button
               type="button"
-              className="usage-refresh-btn"
-              style={noDragStyle}
+              className="ghost-icon !h-6 !w-6 flex-shrink-0"
               onClick={() => void refreshCodexUsage()}
               disabled={usageRefreshing}
               title={codexUsage?.fetchedAt ? `更新于 ${dayjs(codexUsage.fetchedAt).format('HH:mm:ss')}` : '刷新 Codex 用量'}
               aria-label="刷新 Codex 用量"
             >
-              <span className={usageRefreshing ? 'inline-block animate-spin' : 'inline-block'}>↻</span>
+              <RefreshIcon size={12} className={usageRefreshing ? 'animate-spin' : ''} />
             </button>
           </div>
         )}
 
-        <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5" style={noDragStyle}>
-          <button className="icon-btn" style={noDragStyle} onClick={() => setSettingsOpen((v) => !v)} title="设置">
-            ⚙
-          </button>
-          <button className="icon-btn" style={noDragStyle} onClick={() => void window.todoApi.minimizeWindow()} title="最小化">
-            🗕
-          </button>
-          <button className="icon-btn-danger" style={noDragStyle} onClick={() => void window.todoApi.closeWindow()} title="退出">
-            ✕
-          </button>
+        {/* 副标题 */}
+        <div className="flex items-center justify-between px-3 pb-1 text-[11px] text-[var(--text-3)]">
+          <span className="tabular-nums">{dayjs().format('MM-DD HH:mm')}</span>
+          <span>{openTasks.length} 项待办</span>
         </div>
 
-        <div className="mb-2 flex min-h-5 items-center justify-between gap-2 px-1 text-[11px] text-slate-300">
-          <span className="flex-shrink-0">ApexTodo · {dayjs().format('MM-DD HH:mm')}</span>
-          {state?.settings.desktopPinned && (
-            <span className="rounded-full border border-emerald-300/25 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] text-emerald-200">
-              桌面
-            </span>
-          )}
+        {/* 命令式输入 */}
+        <div className="flex-shrink-0 px-3 pb-3 pt-1">
+          <div className="group/input flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 transition-all duration-200 focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
+            <PlusIcon size={15} className="flex-shrink-0 text-[var(--text-3)] transition-colors group-focus-within/input:text-[var(--accent)]" />
+            <input
+              value={newTaskText}
+              onChange={(event) => setNewTaskText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  void addTask();
+                }
+              }}
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-3)]"
+              placeholder="添加任务，回车确认…"
+            />
+            <kbd className="hidden flex-shrink-0 rounded border border-[var(--line)] px-1.5 py-0.5 text-[9px] text-[var(--text-3)] sm:block">
+              Enter
+            </kbd>
+          </div>
         </div>
 
-        <section className="mb-3 grid grid-cols-[1fr_auto] gap-2">
-          <input
-            value={newTaskText}
-            onChange={(event) => setNewTaskText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                void addTask();
-              }
-            }}
-            className="neo-input"
-            placeholder="闪电录入：输入后回车，自动入栈顶"
-          />
-          <button className="action-btn bg-cyan-300 text-slate-900 hover:bg-cyan-200" onClick={() => void addTask()}>
-            添加
-          </button>
-        </section>
-
-        <section className="min-h-0 flex flex-1 flex-col rounded-2xl border border-white/15 bg-black/25 p-2.5">
-          <div className="min-h-0 flex-1 space-y-2 overflow-auto pr-1">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => void onDragEnd(event)}>
-              <SortableContext items={openTasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+        {/* 任务列表 */}
+        <main className="min-h-0 flex-1 overflow-y-auto px-3 pb-1">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => void onDragEnd(event)}>
+            <SortableContext items={openTasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-2.5">
                 {openTasks.map((task) => (
                   <SortableTaskItem
                     key={task.id}
@@ -493,114 +567,188 @@ export default function App() {
                     onUpdateText={updateTaskText}
                   />
                 ))}
-              </SortableContext>
-            </DndContext>
+              </div>
+            </SortableContext>
+          </DndContext>
 
-            {openTasks.length === 0 && <div className="empty-box">暂无待办，先添加一条任务</div>}
-          </div>
+          {openTasks.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--surface-2)] text-[var(--text-3)]">
+                <CheckIcon size={18} />
+              </span>
+              <p className="text-xs text-[var(--text-3)]">全部搞定，暂无待办</p>
+            </div>
+          )}
 
-          <div className="mt-3 flex-shrink-0 border-t border-white/15 pt-2">
-            <button className="fold-btn" onClick={() => setCompletedOpen((v) => !v)}>
-              <span>已完成（{completedTasks.length}）</span>
-              <span className={`transition-transform duration-300 ${completedOpen ? 'rotate-180' : ''}`}>⌄</span>
-            </button>
+          {completedTasks.length > 0 && (
+            <div className="mt-1">
+              <button
+                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] text-[var(--text-2)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]"
+                onClick={() => setCompletedOpen((v) => !v)}
+              >
+                <ChevronDownIcon
+                  size={13}
+                  className={`transition-transform duration-300 ${completedOpen ? 'rotate-180' : ''}`}
+                />
+                <span>已完成 · {completedTasks.length}</span>
+              </button>
 
-            <div
-              className={`overflow-hidden transition-all duration-300 ${
-                completedOpen ? 'mt-2 max-h-[40vh] opacity-100' : 'max-h-0 opacity-0'
-              }`}
-            >
-              <div className="max-h-[calc(40vh-0.5rem)] space-y-2 overflow-auto pr-1">
-                {completedTasks.map((task: TodoItem) => (
-                  <div key={task.id} className="done-card">
-                    <div className="min-w-0 flex-1">
-                      <p className="whitespace-pre-wrap break-all text-sm text-slate-300 line-through">{task.text}</p>
-                      <p className="text-xs text-slate-400">{task.createdAt}</p>
-                    </div>
-                    <button
-                      className="rounded-md border border-rose-300/30 bg-rose-500/15 px-2 py-1 text-[11px] text-rose-200 transition-all duration-300 hover:bg-rose-500/30"
-                      onClick={() => void deleteTask(task.id)}
-                      title="删除待办"
+              <div
+                className={`overflow-hidden transition-all duration-300 ${
+                  completedOpen ? 'max-h-[40vh] opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className="flex max-h-[40vh] flex-col gap-2.5 overflow-auto">
+                  {completedTasks.map((task: TodoItem) => (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 transition-colors hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)]"
                     >
-                      🗑
-                    </button>
-                    <input type="checkbox" checked={task.completed} className="h-4 w-4" onChange={() => void toggleTask(task.id, false)} />
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => void toggleTask(task.id, false)}
+                        title="标记为未完成"
+                        className="grid h-[18px] w-[18px] flex-shrink-0 place-items-center self-center rounded-full border border-[var(--success)] bg-[var(--success)] text-white"
+                      >
+                        <CheckIcon size={11} strokeWidth={3} />
+                      </button>
+                      <p className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-[var(--text-3)] line-through">
+                        {task.text}
+                      </p>
+                      <span
+                        className="flex-shrink-0 text-[10px] tabular-nums text-[var(--text-3)]"
+                        title={dayjs(task.createdAt).isValid() ? dayjs(task.createdAt).format('YYYY-MM-DD HH:mm') : task.createdAt}
+                      >
+                        {dayjs(task.createdAt).isValid()
+                          ? dayjs(task.createdAt).isSame(dayjs(), 'day')
+                            ? dayjs(task.createdAt).format('HH:mm')
+                            : dayjs(task.createdAt).format('MM-DD')
+                          : task.createdAt}
+                      </span>
+                      <button
+                        className="ghost-icon danger !h-7 !w-7 flex-shrink-0 text-[var(--text-3)]"
+                        onClick={() => void deleteTask(task.id)}
+                        title="删除待办"
+                      >
+                        <TrashIcon size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+
+        {/* 设置面板 */}
+        {settingsOpen && (
+          <section className="settings-panel">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-sm font-semibold">设置</p>
+              <button className="ghost-icon" onClick={() => setSettingsOpen(false)} title="关闭">
+                <CloseIcon size={15} />
+              </button>
+            </div>
+
+            <p className="setting-group-label">窗口与桌面</p>
+            <div className="setting-row">
+              <div>
+                <div className="setting-label">始终置顶</div>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={state?.settings.alwaysOnTop ?? true}
+                disabled={state?.settings.desktopPinned ?? false}
+                onChange={(event) => void toggleAlwaysOnTop(event.target.checked)}
+              />
+            </div>
+            <div className="setting-row">
+              <div className="setting-label">嵌入桌面</div>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={state?.settings.desktopPinned ?? false}
+                onChange={() => void toggleDesktopPin()}
+              />
+            </div>
+            <div className="setting-row">
+              <div>
+                <div className="setting-label">锁定位置</div>
+                <div className="setting-hint">仅桌面模式可用</div>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={settingsDraft.desktopLockPosition}
+                disabled={!(state?.settings.desktopPinned ?? false)}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, desktopLockPosition: event.target.checked }))}
+              />
+            </div>
+            <div className="setting-row">
+              <div>
+                <div className="setting-label">鼠标穿透</div>
+                <div className="setting-hint">Ctrl+Shift+Z 快速切换</div>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={settingsDraft.desktopMouseThrough}
+                disabled={!(state?.settings.desktopPinned ?? false)}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, desktopMouseThrough: event.target.checked }))}
+              />
+            </div>
+            <div className="setting-row">
+              <div className="setting-label">开机自启（静默）</div>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={settingsDraft.launchAtStartup}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, launchAtStartup: event.target.checked }))}
+              />
+            </div>
+
+            <p className="setting-group-label">Codex 用量</p>
+            <div className="setting-row">
+              <div>
+                <div className="setting-label">显示 Codex 用量</div>
+                <div className="setting-hint">顶部展示 5 小时 / 本周用量</div>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={settingsDraft.showCodexUsage}
+                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, showCodexUsage: event.target.checked }))}
+              />
+            </div>
+
+            <p className="setting-group-label">外观</p>
+            <div className="setting-row">
+              <div className="setting-label">主题模式</div>
+              <div className="theme-seg">
+                {(
+                  [
+                    { value: 'light', label: '浅色' },
+                    { value: 'dark', label: '深色' },
+                    { value: 'system', label: '跟随系统' }
+                  ] as { value: ThemeMode; label: string }[]
+                ).map((option) => (
+                  <button
+                    key={option.value}
+                    className={themeMode === option.value ? 'active' : ''}
+                    onClick={() => void changeTheme(option.value)}
+                  >
+                    {option.label}
+                  </button>
                 ))}
               </div>
             </div>
-          </div>
-        </section>
-
-        {settingsOpen && (
-          <section className="settings-panel">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold text-cyan-100">设置面板</p>
-              <button className="ui-btn" onClick={() => setSettingsOpen(false)}>关闭</button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <label className="option-item">
-                <input
-                  type="checkbox"
-                  checked={state?.settings.alwaysOnTop ?? true}
-                  disabled={state?.settings.desktopPinned ?? false}
-                  onChange={(event) => void toggleAlwaysOnTop(event.target.checked)}
-                />
-                始终置顶
-              </label>
-              <label className="option-item">
-                <input type="checkbox" checked={state?.settings.desktopPinned ?? false} onChange={() => void toggleDesktopPin()} />
-                嵌入桌面
-              </label>
-              <label className="option-item col-span-2">
-                <input
-                  type="checkbox"
-                  checked={settingsDraft.desktopLockPosition}
-                  disabled={!(state?.settings.desktopPinned ?? false)}
-                  onChange={(event) => setSettingsDraft((prev) => ({ ...prev, desktopLockPosition: event.target.checked }))}
-                />
-                桌面模式锁定位置
-              </label>
-              <label className="option-item col-span-2">
-                <input
-                  type="checkbox"
-                  checked={settingsDraft.desktopMouseThrough}
-                  disabled={!(state?.settings.desktopPinned ?? false)}
-                  onChange={(event) => setSettingsDraft((prev) => ({ ...prev, desktopMouseThrough: event.target.checked }))}
-                />
-                桌面模式鼠标穿透（Ctrl+Shift+Z 可切换）
-              </label>
-              <label className="option-item col-span-2">
-                <input
-                  type="checkbox"
-                  checked={settingsDraft.showCodexUsage}
-                  onChange={(event) => setSettingsDraft((prev) => ({ ...prev, showCodexUsage: event.target.checked }))}
-                />
-                显示 Codex 用量（默认关闭）
-              </label>
-              <label className="option-item col-span-2">
-                <input
-                  type="checkbox"
-                  checked={settingsDraft.launchAtStartup}
-                  onChange={(event) => setSettingsDraft((prev) => ({ ...prev, launchAtStartup: event.target.checked }))}
-                />
-                开机自启（静默）
-              </label>
-            </div>
-
-            <div className="mt-2 space-y-2">
-              <div className="option-item">
-                <span>全局热键</span>
-                <button className="ui-btn ml-2" onClick={() => setIsCapturingShortcut(true)}>
-                  {isCapturingShortcut ? '请按组合键（Esc 取消）' : formatShortcutForDisplay(settingsDraft.globalShortcut)}
-                </button>
-              </div>
-
-              <div className="option-item">
-                <span>窗口透明度</span>
+            <div className="setting-row">
+              <div className="setting-label">窗口透明度</div>
+              <div className="flex w-1/2 items-center gap-2">
                 <input
                   type="range"
+                  className="slider"
                   min={35}
                   max={100}
                   value={Math.round((settingsDraft.windowOpacity ?? 0.96) * 100)}
@@ -610,61 +758,82 @@ export default function App() {
                       windowOpacity: Number(event.target.value) / 100
                     }))
                   }
-                  className="ml-2 flex-1 accent-cyan-300"
                 />
-                <span className="w-10 text-right text-[11px] text-slate-300">
+                <span className="w-9 text-right text-[11px] tabular-nums text-[var(--text-2)]">
                   {Math.round((settingsDraft.windowOpacity ?? 0.96) * 100)}%
                 </span>
               </div>
+            </div>
 
-              <div className="space-y-1">
-                <div className="option-item">
-                  <span>待办文件夹</span>
-                  <button className="ui-btn ml-2" onClick={() => void selectTodoFolder()} disabled={selectingFolder}>
-                    {selectingFolder ? '选择中...' : '选择文件夹'}
-                  </button>
-                </div>
-                <p className="px-1 text-[11px] text-slate-400 break-all">
-                  {getTodoFolderPath(settingsDraft.todoFilePath) || '未选择'}
-                </p>
+            <p className="setting-group-label">快捷键</p>
+            <div className="setting-row">
+              <div className="flex items-center gap-2 setting-label">
+                <KeyboardIcon size={14} className="text-[var(--text-2)]" />
+                全局抓取热键
               </div>
+              <button className="ghost-text" onClick={() => setIsCapturingShortcut(true)}>
+                {isCapturingShortcut ? '请按组合键…' : formatShortcutForDisplay(settingsDraft.globalShortcut)}
+              </button>
+            </div>
 
-              <label className="option-item">
-                <input type="checkbox" checked={settingsDraft.webdav.enabled} onChange={(event) => updateWebdav('enabled', event.target.checked)} />
-                启用 WebDAV
-              </label>
-
-              <input value={settingsDraft.webdav.url} onChange={(event) => updateWebdav('url', event.target.value)} className="neo-input" placeholder="WebDAV 地址" />
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <input value={settingsDraft.webdav.username} onChange={(event) => updateWebdav('username', event.target.value)} className="neo-input" placeholder="用户名" />
-                <input value={settingsDraft.webdav.password} onChange={(event) => updateWebdav('password', event.target.value)} className="neo-input" placeholder="密码" type="password" />
-                <input value={settingsDraft.webdav.remotePath} onChange={(event) => updateWebdav('remotePath', event.target.value)} className="neo-input" placeholder="远端路径 /todo.md" />
+            <p className="setting-group-label">存储</p>
+            <div className="setting-row">
+              <div className="flex items-center gap-2 setting-label">
+                <FolderIcon size={14} className="text-[var(--text-2)]" />
+                待办文件夹
               </div>
+              <button className="ghost-text" onClick={() => void selectTodoFolder()} disabled={selectingFolder}>
+                {selectingFolder ? '选择中…' : '选择文件夹'}
+              </button>
+            </div>
+            <p className="break-all px-1 pb-1 text-[11px] text-[var(--text-3)]">
+              {getTodoFolderPath(settingsDraft.todoFilePath) || '默认：文档/ApexTodo/todo.md'}
+            </p>
 
-              <div className="option-item">
-                <span>同步间隔（分钟）</span>
+            <p className="setting-group-label flex items-center gap-1.5">
+              <CloudIcon size={12} /> WebDAV 同步
+            </p>
+            <div className="setting-row">
+              <div className="setting-label">启用 WebDAV</div>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={settingsDraft.webdav.enabled}
+                onChange={(event) => updateWebdav('enabled', event.target.checked)}
+              />
+            </div>
+            <div className="mt-2 space-y-2">
+              <input value={settingsDraft.webdav.url} onChange={(event) => updateWebdav('url', event.target.value)} className="field" placeholder="WebDAV 地址" />
+              <div className="grid grid-cols-2 gap-2">
+                <input value={settingsDraft.webdav.username} onChange={(event) => updateWebdav('username', event.target.value)} className="field" placeholder="用户名" />
+                <input value={settingsDraft.webdav.password} onChange={(event) => updateWebdav('password', event.target.value)} className="field" placeholder="密码" type="password" />
+              </div>
+              <input value={settingsDraft.webdav.remotePath} onChange={(event) => updateWebdav('remotePath', event.target.value)} className="field" placeholder="远端路径 /todo.md" />
+              <div className="flex items-center gap-2">
+                <span className="flex-shrink-0 text-[var(--text-2)]">同步间隔</span>
                 <input
                   value={String(settingsDraft.webdav.intervalMinutes || 60)}
                   onChange={(event) => updateWebdav('intervalMinutes', Math.max(1, Number(event.target.value) || 60))}
-                  className="neo-input ml-2 w-24"
+                  className="field !w-24"
                   type="number"
                   min={1}
                 />
+                <span className="text-[var(--text-3)]">分钟</span>
               </div>
             </div>
 
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <button className="action-btn flex-1 bg-cyan-300 text-slate-900 hover:bg-cyan-200" onClick={() => void saveSettings()}>
+            <div className="mt-4 flex gap-2">
+              <button className="btn-primary flex-1" onClick={() => void saveSettings()}>
                 保存设置
               </button>
-              <button className="action-btn flex-1 bg-amber-300 text-slate-900 hover:bg-amber-200 disabled:opacity-60" onClick={() => void runSync()} disabled={syncing}>
-                {syncing ? '同步中...' : '立即同步'}
+              <button className="ghost-text flex-1 justify-center" onClick={() => void runSync()} disabled={syncing}>
+                <RefreshIcon size={13} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? '同步中…' : '立即同步'}
               </button>
             </div>
 
-            <p className="mt-2 text-[11px] text-slate-400">
-              最近同步：{state?.lastSyncTime ? dayjs(state.lastSyncTime).format('MM-DD HH:mm:ss') : '暂无'} | {state?.syncMessage ?? '未开始'}
+            <p className="mt-2.5 text-[11px] text-[var(--text-3)]">
+              最近同步：{state?.lastSyncTime ? dayjs(state.lastSyncTime).format('MM-DD HH:mm:ss') : '暂无'} · {state?.syncMessage ?? '未开始'}
             </p>
           </section>
         )}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="apexGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="128">
+      <stop offset="0" stop-color="#0cd06c"/>
+      <stop offset="1" stop-color="#06aa52"/>
+    </linearGradient>
+  </defs>
+  <!-- 圆角方块底：呼应 App 圆角矩形与微信绿 -->
+  <rect x="8" y="10" width="112" height="112" rx="30" fill="url(#apexGrad)"/>
+  <!-- 字母 A / 尖峰(Apex)：白外三角 → 同色内三角挖空 → 白横杠 -->
+  <path d="M64 16 L27 108 L101 108 Z" fill="#ffffff"/>
+  <path d="M64 50 L50.5 108 L77.5 108 Z" fill="url(#apexGrad)"/>
+  <rect x="49.5" y="70.7" width="29" height="8.6" rx="2" fill="#ffffff"/>
+</svg>

@@ -70,7 +70,8 @@ export class WebDavSyncService {
     }
 
     const remoteBuffer = await client.getFileContents(remotePath);
-    const remoteContent = Buffer.from(remoteBuffer).toString('utf-8');
+    // webdav 不同版本可能返回 string / Buffer / 带 details 包装，统一按字节处理
+    const remoteContent = Buffer.from(remoteBuffer as unknown as Uint8Array).toString('utf-8');
 
     if (remoteContent === localContent) {
       this.onStatus({
@@ -80,8 +81,21 @@ export class WebDavSyncService {
       return;
     }
 
-    const remoteStat = await client.stat(remotePath);
-    const remoteMtime = remoteStat.lastmod ? Date.parse(remoteStat.lastmod) : 0;
+    // 兼容 details 包装（.data）与不同版本字段名 lastmod / lastModified
+    const statRaw = (await client.stat(remotePath)) as unknown as {
+      lastmod?: string;
+      lastModified?: string;
+      mtime?: string | number | Date;
+      data?: { lastmod?: string; lastModified?: string; mtime?: string | number | Date };
+    };
+    const statData = statRaw?.data ?? statRaw;
+    const remoteMtime = statData?.lastmod
+      ? Date.parse(statData.lastmod)
+      : statData?.lastModified
+        ? Date.parse(statData.lastModified)
+        : statData?.mtime
+          ? new Date(statData.mtime).getTime()
+          : 0;
 
     if (remoteMtime > localStat.mtimeMs + 1000) {
       await writeFile(todoFilePath, remoteContent, 'utf-8');

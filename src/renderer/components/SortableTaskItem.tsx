@@ -1,7 +1,9 @@
-﻿import { CSS } from '@dnd-kit/utilities';
+import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
 import { useEffect, useState } from 'react';
+import dayjs from 'dayjs';
 import { TodoItem } from '../../shared/types';
+import { CheckIcon, GripIcon, PencilIcon, TrashIcon } from './icons';
 
 interface Props {
   task: TodoItem;
@@ -35,93 +37,126 @@ export function SortableTaskItem({ task, onToggle, onDelete, onUpdateText }: Pro
     setIsEditing(false);
   }
 
+  const created = dayjs(task.createdAt);
+  const fullTime = created.isValid() ? created.format('YYYY-MM-DD HH:mm') : task.createdAt;
+  const timeLabel = !created.isValid()
+    ? task.createdAt
+    : created.isSame(dayjs(), 'day')
+      ? created.format('HH:mm')
+      : created.format('MM-DD');
+
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition: transition || 'transform 0.28s ease-in-out'
+    transition: transition || 'transform 0.2s ease'
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-all duration-300 ${
-        task.completed
-          ? 'border-emerald-300/30 bg-emerald-500/10'
-          : 'border-white/15 bg-slate-900/55 hover:border-cyan-200/35 hover:bg-slate-900/80'
-      } ${isDragging ? 'scale-[1.012] shadow-[0_16px_36px_rgba(8,47,73,0.45)]' : ''}`}
+      className={`group flex items-center gap-2.5 rounded-lg border px-3 py-3 transition-colors duration-150 ${
+        isDragging
+          ? 'z-10 border-[var(--accent)] bg-[var(--surface-2)] shadow-[0_10px_24px_var(--shadow)] ring-1 ring-[var(--accent)]'
+          : 'border-[var(--line)] bg-[var(--surface)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)]'
+      }`}
     >
       <button
-        {...attributes}
-        {...listeners}
-        className="cursor-grab rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-[11px] text-slate-300 transition-all duration-300 hover:bg-white/15 active:cursor-grabbing"
-        title="拖拽排序"
+        type="button"
+        onClick={() => onToggle(task.id, !task.completed)}
+        title={task.completed ? '标记为未完成' : '标记为完成'}
+        className="grid h-[18px] w-[18px] flex-shrink-0 place-items-center self-center rounded-full border transition-all duration-200 hover:border-[var(--accent)]"
+        style={{
+          borderColor: task.completed ? 'var(--success)' : 'var(--line-strong)',
+          background: task.completed ? 'var(--success)' : 'transparent',
+          color: '#ffffff'
+        }}
       >
-        ⋮⋮
+        {task.completed && <CheckIcon size={11} strokeWidth={3} />}
       </button>
 
-      <input
-        type="checkbox"
-        className="h-4 w-4 cursor-pointer accent-cyan-300"
-        checked={task.completed}
-        onChange={(event) => onToggle(task.id, event.target.checked)}
-      />
-
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 self-center">
         {isEditing ? (
-          <div className="space-y-1">
+          <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
             <textarea
               value={draftText}
               onChange={(event) => setDraftText(event.target.value)}
-              className="w-full resize-none rounded-lg border border-cyan-300/45 bg-slate-900/70 px-2 py-1.5 text-sm text-slate-100 outline-none"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  submitEdit();
+                }
+                if (event.key === 'Escape') {
+                  setDraftText(task.text);
+                  setIsEditing(false);
+                }
+              }}
+              autoFocus
+              className="field resize-none !py-1.5 text-[13px] leading-5"
               rows={2}
             />
-            <div className="flex items-center gap-1">
-              <button
-                className="rounded-md border border-emerald-300/35 bg-emerald-500/20 px-2 py-1 text-[11px] text-emerald-200"
-                onClick={submitEdit}
-                title="保存"
-              >
-                ✓
+            <div className="flex items-center gap-1.5">
+              <button className="btn-primary !px-2.5 !py-1 !text-[11px]" onClick={submitEdit} title="保存">
+                <CheckIcon size={12} /> 保存
               </button>
               <button
-                className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[11px] text-slate-200"
+                className="ghost-text !py-1 !text-[11px]"
                 onClick={() => {
                   setDraftText(task.text);
                   setIsEditing(false);
                 }}
                 title="取消"
               >
-                ↺
+                取消
               </button>
             </div>
           </div>
         ) : (
-          <>
-            <p className={`whitespace-pre-wrap break-all text-sm leading-5 ${task.completed ? 'line-through text-slate-400' : 'text-slate-100'}`}>
-              {task.text}
-            </p>
-            <p className="mt-0.5 text-xs text-slate-400">{task.createdAt}</p>
-          </>
+          <p
+            onDoubleClick={() => setIsEditing(true)}
+            title="双击编辑"
+            className={`min-w-0 flex-1 cursor-text truncate text-[13px] leading-[18px] ${
+              task.completed ? 'text-[var(--text-3)] line-through' : 'text-[var(--text)]'
+            }`}
+          >
+            {task.text}
+          </p>
         )}
       </div>
 
       {!isEditing && (
-        <button
-          className="rounded-md border border-cyan-300/30 bg-cyan-500/12 px-2 py-1 text-[11px] text-cyan-100 transition-all duration-300 hover:bg-cyan-500/25"
-          onClick={() => setIsEditing(true)}
-          title="编辑待办"
-        >
-          ✎
-        </button>
+        <>
+          <span
+            className="flex-shrink-0 text-[10px] tabular-nums text-[var(--text-3)]"
+            title={fullTime}
+          >
+            {timeLabel}
+          </span>
+          <div className="flex flex-shrink-0 items-center gap-0.5">
+          <button
+            {...attributes}
+            {...listeners}
+            className="ghost-icon !h-7 !w-6 cursor-grab text-[var(--text-3)] hover:text-[var(--text)] active:cursor-grabbing"
+            title="拖拽排序"
+          >
+            <GripIcon size={14} />
+          </button>
+          <button
+            className="ghost-icon !h-7 !w-7 text-[var(--text-3)] hover:text-[var(--accent)]"
+            onClick={() => setIsEditing(true)}
+            title="编辑待办"
+          >
+            <PencilIcon size={13} />
+          </button>
+          <button
+            className="ghost-icon danger !h-7 !w-7 text-[var(--text-3)]"
+            onClick={() => onDelete(task.id)}
+            title="删除待办"
+          >
+            <TrashIcon size={13} />
+          </button>
+          </div>
+        </>
       )}
-
-      <button
-        className="rounded-md border border-rose-300/30 bg-rose-500/15 px-2 py-1 text-[11px] text-rose-200 transition-all duration-300 hover:bg-rose-500/30"
-        onClick={() => onDelete(task.id)}
-        title="删除待办"
-      >
-        🗑
-      </button>
     </div>
   );
 }

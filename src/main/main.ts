@@ -251,45 +251,82 @@ function registerGlobalHotkey() {
 }
 
 function createTrayIcon() {
-  const size = 32;
-  const buffer = Buffer.alloc(size * size * 4, 0);
+  // 与 scripts/generate-icons.mjs 同源：字母 A / 尖峰(Apex)，2x 超采样抗锯齿。
+  const S = 128;
+  const buffer = Buffer.alloc(S * S * 4, 0);
 
-  const setPixel = (x: number, y: number, r: number, g: number, b: number, a = 255) => {
-    if (x < 0 || y < 0 || x >= size || y >= size) {
+  const setPixel = (x: number, y: number, r: number, g: number, b: number, a: number) => {
+    if (x < 0 || y < 0 || x >= S || y >= S || a <= 0) {
       return;
     }
-
-    const offset = (y * size + x) * 4;
-    buffer[offset] = b;
-    buffer[offset + 1] = g;
-    buffer[offset + 2] = r;
-    buffer[offset + 3] = a;
+    const offset = (y * S + x) * 4;
+    buffer[offset] = b; // B
+    buffer[offset + 1] = g; // G
+    buffer[offset + 2] = r; // R
+    buffer[offset + 3] = Math.round(Math.max(0, Math.min(255, a)));
   };
 
-  for (let y = 4; y < 28; y += 1) {
-    for (let x = 4; x < 28; x += 1) {
-      setPixel(x, y, 56, 189, 248, 255);
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const smooth = (e0: number, e1: number, x: number) => {
+    const t = clamp((x - e0) / (e1 - e0), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  const inTri = (px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) => {
+    const d1 = (px - b.x) * (a.y - b.y) - (a.x - b.x) * (py - b.y);
+    const d2 = (px - c.x) * (b.y - c.y) - (b.x - c.x) * (py - c.y);
+    const d3 = (px - a.x) * (c.y - a.y) - (c.x - a.x) * (py - a.y);
+    return !(d1 < 0 || d2 < 0 || d3 < 0) || !(d1 > 0 || d2 > 0 || d3 > 0);
+  };
+
+  const OUTER = [{ x: 64, y: 16 }, { x: 27, y: 108 }, { x: 101, y: 108 }];
+  const INNER = [{ x: 64, y: 50 }, { x: 50.5, y: 108 }, { x: 77.5, y: 108 }];
+  const BAR = { cx: 64, cy: 75, halfW: 14.5, halfH: 4.3, radius: 2 };
+
+  for (let y = 0; y < S; y += 1) {
+    for (let x = 0; x < S; x += 1) {
+      let rr = 0;
+      let gg = 0;
+      let bb = 0;
+      let aa = 0;
+      for (const sy of [0.25, 0.75]) {
+        for (const sx of [0.25, 0.75]) {
+          const px = x + sx;
+          const py = y + sy;
+
+          const qx = Math.abs(px - 64) - (56 - 30);
+          const qy = Math.abs(py - 66) - (56 - 30);
+          const boxDist = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - 30;
+          const boxCov = 1 - smooth(-0.9, 0.9, boxDist);
+          if (boxCov <= 0.002) {
+            continue;
+          }
+
+          const isA = inTri(px, py, OUTER[0], OUTER[1], OUTER[2]) &&
+            !inTri(px, py, INNER[0], INNER[1], INNER[2]);
+          const bx = Math.abs(px - BAR.cx) - (BAR.halfW - BAR.radius);
+          const by = Math.abs(py - BAR.cy) - (BAR.halfH - BAR.radius);
+          const barDist = Math.hypot(Math.max(bx, 0), Math.max(by, 0)) + Math.min(Math.max(bx, by), 0) - BAR.radius;
+          const white = isA || barDist < 0 ? 1 : 0;
+
+          const t = clamp(py / S, 0, 1);
+          let r = 12 + (6 - 12) * t;
+          let g = 208 + (170 - 208) * t;
+          let b = 108 + (82 - 108) * t;
+          r += (255 - r) * white;
+          g += (255 - g) * white;
+          b += (255 - b) * white;
+
+          rr += r * boxCov;
+          gg += g * boxCov;
+          bb += b * boxCov;
+          aa += boxCov;
+        }
+      }
+      setPixel(x, y, rr / 4, gg / 4, bb / 4, clamp(aa / 4, 0, 1) * 255);
     }
   }
 
-  for (let y = 15; y < 24; y += 1) {
-    const x = y - 7;
-    setPixel(x, y, 255, 255, 255, 255);
-    setPixel(x + 1, y, 255, 255, 255, 255);
-  }
-
-  const checkPixels = [
-    [12, 21], [13, 20], [14, 19], [15, 18],
-    [16, 17], [17, 16], [18, 15], [19, 14],
-    [20, 13], [21, 12], [22, 11], [23, 10]
-  ];
-
-  for (const [x, y] of checkPixels) {
-    setPixel(x, y, 255, 255, 255, 255);
-    setPixel(x, y + 1, 255, 255, 255, 255);
-  }
-
-  return nativeImage.createFromBitmap(buffer, { width: size, height: size }).resize({ width: 16, height: 16 });
+  return nativeImage.createFromBitmap(buffer, { width: S, height: S }).resize({ width: 16, height: 16, quality: 'good' });
 }
 
 function updateTrayMenu() {
@@ -487,7 +524,7 @@ function scheduleSaveWindowBounds() {
 
 function createWindow(startHidden: boolean) {
   const bounds = getLaunchWindowBounds();
-  const enableTransparentWindow = !app.isPackaged;
+  const enableTransparentWindow = true;
 
   mainWindow = new BrowserWindow({
     x: bounds.x,
@@ -504,6 +541,7 @@ function createWindow(startHidden: boolean) {
     skipTaskbar: true,
     show: !startHidden,
     title: 'ApexTodo',
+    icon: app.isPackaged ? undefined : path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -668,7 +706,8 @@ function setupIpcHandlers() {
 
   ipcMain.handle('task:update-text', async (_event, taskId: string, text: string) => {
     const target = tasks.find((task) => task.id === taskId);
-    const nextText = (text || '').trim();
+    // 与新建一致，把换行/连续空白压成空格，避免多行文本破坏单行 Markdown 后重载被截断
+    const nextText = (text || '').replace(/\s+/g, ' ').trim();
 
     if (!target || !nextText) {
       return currentState();
@@ -756,10 +795,10 @@ function setupIpcHandlers() {
       broadcastState();
       return {
         ok: true,
-        message: 'Sync done'
+        message: '同步完成'
       };
     } catch (error) {
-      const message = `Sync failed: ${(error as Error).message}`;
+      const message = `同步失败：${(error as Error).message}`;
       syncMessage = message;
       broadcastState();
       return {
