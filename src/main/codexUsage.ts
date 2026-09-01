@@ -88,7 +88,7 @@ export async function getCodexUsage(): Promise<CodexUsage> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${accessToken}`,
-    'User-Agent': 'ApexTodo/1.0.6'
+    'User-Agent': 'ApexTodo/1.0.7'
   };
   const accountId = auth.tokens?.account_id?.trim();
   if (accountId) {

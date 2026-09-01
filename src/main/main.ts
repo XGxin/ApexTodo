@@ -145,11 +145,58 @@ function pushNotification(text: string) {
   }).show();
 }
 
-function applyLoginItemSetting() {
+const WINDOWS_RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+const LOGIN_ITEM_NAME = 'ApexTodo';
+// 旧版本误用 Electron 默认名写入的开机启动项，启动后顺手清理
+const LEGACY_LOGIN_ITEM_NAMES = ['electron.app.Electron'];
+
+function getPortableExecutableFile() {
+  return process.env.PORTABLE_EXECUTABLE_FILE?.trim() || '';
+}
+
+async function setWindowsRunItem(openAtLogin: boolean, command?: string) {
+  if (openAtLogin && command) {
+    await execFileAsync('reg', [
+      'add', WINDOWS_RUN_KEY,
+      '/v', LOGIN_ITEM_NAME,
+      '/t', 'REG_SZ',
+      '/d', command,
+      '/f'
+    ]);
+  } else {
+    try {
+      await execFileAsync('reg', ['delete', WINDOWS_RUN_KEY, '/v', LOGIN_ITEM_NAME, '/f']);
+    } catch {
+      // 键值不存在时 reg delete 返回非零，忽略即可
+    }
+  }
+
+  for (const legacyName of LEGACY_LOGIN_ITEM_NAMES) {
+    try {
+      await execFileAsync('reg', ['delete', WINDOWS_RUN_KEY, '/v', legacyName, '/f']);
+    } catch {
+      // 没有历史遗留项时忽略
+    }
+  }
+}
+
+async function applyLoginItemSetting() {
+  const portableExe = getPortableExecutableFile();
+
+  // electron-builder 便携版运行在随机临时解压目录，setLoginItemSettings 会写死临时路径，
+  // 程序退出或系统清理后即失效；便携版改用 PORTABLE_EXECUTABLE_FILE（用户手中真实 exe）写注册表。
+  if (portableExe) {
+    // 开机直接显示窗口，不再静默隐藏到托盘，避免被误认为没有启动
+    await setWindowsRunItem(settings.launchAtStartup, `"${portableExe}"`);
+    return;
+  }
+
+  // 安装版 / 开发环境使用 Electron 原生登录项（安装路径固定，可靠）
   app.setLoginItemSettings({
-    openAtLogin: settings.launchAtStartup,
-    args: ['--hidden']
+    openAtLogin: settings.launchAtStartup
   });
+  // 用户若在便携版与安装版之间切换，清掉便携版自定义键，避免重复启动
+  await setWindowsRunItem(false);
 }
 
 function showMainWindow() {
@@ -780,7 +827,7 @@ function setupIpcHandlers() {
       storage.watchTodoFile(settings.todoFilePath);
     }
 
-    applyLoginItemSetting();
+    await applyLoginItemSetting();
     applyWindowMode();
     syncService.restartTimer();
     broadcastState();
@@ -832,7 +879,7 @@ async function bootstrap() {
   const startHidden = shouldStartHidden();
   createWindow(startHidden);
   ensureTray();
-  applyLoginItemSetting();
+  await applyLoginItemSetting();
   registerGlobalHotkey();
   syncService.start();
 
