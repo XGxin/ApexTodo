@@ -7,6 +7,7 @@ import { createTaskFromText } from './markdown';
 import { getCodexUsage } from './codexUsage';
 import { StorageService } from './storage';
 import { WebDavSyncService } from './sync';
+import { autoUpdateService } from './updater';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_SHORTCUT = 'CommandOrControl+Shift+A';
@@ -653,11 +654,15 @@ function createWindow(startHidden: boolean) {
   }
 
   applyWindowMode();
+  autoUpdateService.initialize(mainWindow);
 }
 
 function setupIpcHandlers() {
   ipcMain.handle('app:get-state', async () => currentState());
   ipcMain.handle('codex:get-usage', async () => getCodexUsage());
+  ipcMain.handle('update:get-state', () => autoUpdateService.getState());
+  ipcMain.handle('update:check', () => autoUpdateService.checkForUpdates());
+  ipcMain.handle('update:install', () => autoUpdateService.installUpdate());
 
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize();
@@ -921,6 +926,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   storage.unwatchTodoFile();
   syncService.stop();
+  autoUpdateService.dispose();
   tray?.destroy();
   tray = null;
 });

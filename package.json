@@ -1,10 +1,14 @@
 {
   "name": "apex-todo",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "ApexTodo local markdown todo desktop widget",
   "main": "dist-electron/main.js",
   "author": "you",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XGxin/ApexTodo.git"
+  },
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:main\" \"npm:dev:electron\"",
     "dev:renderer": "node ./node_modules/vite/dist/node/cli.js",
@@ -14,8 +18,8 @@
     "build:renderer": "node ./node_modules/vite/dist/node/cli.js build",
     "build:main": "tsup --config tsup.config.ts",
     "preview": "node ./node_modules/vite/dist/node/cli.js preview",
-    "dist": "npm run build && electron-builder --win nsis",
-    "dist:portable": "npm run build && electron-builder --win portable",
+    "dist": "npm run build && electron-builder --win nsis --publish never",
+    "dist:portable": "npm run build && electron-builder --win portable --publish never",
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
@@ -25,6 +29,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.13",
+    "electron-updater": "^6.8.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "webdav": "^5.7.1"
@@ -59,6 +64,14 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "XGxin",
+        "repo": "ApexTodo",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -76,6 +89,7 @@
       "signAndEditExecutable": false
     },
     "nsis": {
+      "artifactName": "${productName}.Setup.${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

@@ -4,6 +4,7 @@ export default defineConfig((options) => ({
   entry: {
     main: 'src/main/main.ts',
     codexUsage: 'src/main/codexUsage.ts',
+    updater: 'src/main/updater.ts',
     markdown: 'src/main/markdown.ts',
     storage: 'src/main/storage.ts',
     sync: 'src/main/sync.ts',

@@ -74,3 +74,22 @@ export interface CodexUsage {
   fetchedAt?: string;
   message?: string;
 }
+
+export type UpdateStatus =
+  | 'disabled'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'up-to-date'
+  | 'error';
+
+export interface UpdateState {
+  status: UpdateStatus;
+  currentVersion: string;
+  version?: string;
+  percent?: number;
+  message: string;
+  checkedAt?: string;
+}

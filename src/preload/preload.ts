@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { AppSettings, AppState, CaptureResult, CodexUsage, SaveToastPayload } from '../shared/types';
+import { AppSettings, AppState, CaptureResult, CodexUsage, SaveToastPayload, UpdateState } from '../shared/types';
 
 const api = {
   getState: () => ipcRenderer.invoke('app:get-state') as Promise<AppState>,
   getCodexUsage: () => ipcRenderer.invoke('codex:get-usage') as Promise<CodexUsage>,
+  getUpdateState: () => ipcRenderer.invoke('update:get-state') as Promise<UpdateState>,
+  checkForUpdates: () => ipcRenderer.invoke('update:check') as Promise<UpdateState>,
+  installUpdate: () => ipcRenderer.invoke('update:install') as Promise<UpdateState>,
   addTask: (text: string) => ipcRenderer.invoke('task:add', text) as Promise<AppState>,
   toggleTask: (taskId: string, completed: boolean) => ipcRenderer.invoke('task:toggle', taskId, completed) as Promise<AppState>,
   deleteTask: (taskId: string) => ipcRenderer.invoke('task:delete', taskId) as Promise<AppState>,
@@ -34,6 +37,11 @@ const api = {
     const wrapped = () => handler();
     ipcRenderer.on('window:open-settings-panel', wrapped);
     return () => ipcRenderer.removeListener('window:open-settings-panel', wrapped);
+  },
+  onUpdateState: (handler: (state: UpdateState) => void) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, state: UpdateState) => handler(state);
+    ipcRenderer.on('update:state', wrapped);
+    return () => ipcRenderer.removeListener('update:state', wrapped);
   }
 };
 

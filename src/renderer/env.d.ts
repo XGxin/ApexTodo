@@ -1,12 +1,15 @@
 /// <reference types="vite/client" />
 
-import { AppSettings, AppState, CaptureResult, CodexUsage, SaveToastPayload } from '../shared/types';
+import { AppSettings, AppState, CaptureResult, CodexUsage, SaveToastPayload, UpdateState } from '../shared/types';
 
 declare global {
   interface Window {
     todoApi: {
       getState: () => Promise<AppState>;
       getCodexUsage: () => Promise<CodexUsage>;
+      getUpdateState: () => Promise<UpdateState>;
+      checkForUpdates: () => Promise<UpdateState>;
+      installUpdate: () => Promise<UpdateState>;
       addTask: (text: string) => Promise<AppState>;
       toggleTask: (taskId: string, completed: boolean) => Promise<AppState>;
       deleteTask: (taskId: string) => Promise<AppState>;
@@ -23,6 +26,7 @@ declare global {
       onStateUpdated: (handler: (state: AppState) => void) => () => void;
       onSavedToast: (handler: (payload: SaveToastPayload) => void) => () => void;
       onOpenSettingsPanel: (handler: () => void) => () => void;
+      onUpdateState: (handler: (state: UpdateState) => void) => () => void;
     };
   }
 }
