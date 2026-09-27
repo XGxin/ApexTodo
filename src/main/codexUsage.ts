@@ -1,3 +1,4 @@
+import { app, net } from 'electron';
 import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,6 +6,8 @@ import { CodexUsage, CodexUsageWindow } from '../shared/types';
 
 const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_RETRY_DELAY_MS = 750;
+const REQUEST_ATTEMPTS = 2;
 
 interface CodexAuthFile {
   tokens?: {
@@ -68,6 +71,39 @@ function resolveWindows(raw: RawUsageResponse) {
   };
 }
 
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchUsage(headers: Record<string, string>) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= REQUEST_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      // Electron's Chromium network stack follows the Windows/system proxy.
+      // Node's global fetch does not, which breaks common mihomo/Clash setups.
+      return await net.fetch(CODEX_USAGE_URL, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+        signal: controller.signal
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < REQUEST_ATTEMPTS) {
+        await delay(REQUEST_RETRY_DELAY_MS);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw lastError;
+}
+
 export async function getCodexUsage(): Promise<CodexUsage> {
   const codexHome = process.env.CODEX_HOME?.trim() || path.join(os.homedir(), '.codex');
   const authPath = path.join(codexHome, 'auth.json');
@@ -88,23 +124,15 @@ export async function getCodexUsage(): Promise<CodexUsage> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${accessToken}`,
-    'User-Agent': 'ApexTodo/1.0.7'
+    'User-Agent': `ApexTodo/${app.getVersion()}`
   };
   const accountId = auth.tokens?.account_id?.trim();
   if (accountId) {
     headers['ChatGPT-Account-Id'] = accountId;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
   try {
-    const response = await fetch(CODEX_USAGE_URL, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-      signal: controller.signal
-    });
+    const response = await fetchUsage(headers);
 
     if (response.status === 401 || response.status === 403) {
       return unavailable('Codex 登录已失效，请在 Codex 中重新登录');
@@ -132,9 +160,10 @@ export async function getCodexUsage(): Promise<CodexUsage> {
   } catch (error) {
     return {
       status: 'error',
-      message: (error as Error).name === 'AbortError' ? '读取 Codex 用量超时' : '无法连接 Codex 用量服务'
+      message:
+        (error as Error).name === 'AbortError'
+          ? '读取 Codex 用量超时，请检查系统代理'
+          : '无法连接 Codex 用量服务，请检查系统代理'
     };
-  } finally {
-    clearTimeout(timeout);
   }
 }
