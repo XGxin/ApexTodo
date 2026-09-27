@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, safeStorage } from 'electron';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { watch, FSWatcher } from 'node:fs';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import { parseMarkdownTasks, stringifyMarkdownTasks } from './markdown';
 
 const SETTINGS_FILE = 'settings.json';
 const TODO_FILE_NAME = 'todo.md';
+const ENCRYPTED_PASSWORD_PREFIX = 'safeStorage:';
 
 function getDefaultTodoPath() {
   const baseDir = path.join(app.getPath('documents'), 'ApexTodo');
@@ -22,7 +23,6 @@ function defaultSettings(): AppSettings {
     desktopLockPosition: true,
     desktopMouseThrough: false,
     showCodexUsage: false,
-    launchAtStartup: false,
     windowOpacity: 0.96,
     theme: 'light',
     windowBounds: undefined,
@@ -33,6 +33,35 @@ function defaultSettings(): AppSettings {
       password: '',
       remotePath: '/todo.md',
       intervalMinutes: 60
+    }
+  };
+}
+
+function decryptWebDavPassword(password: string) {
+  if (!password.startsWith(ENCRYPTED_PASSWORD_PREFIX)) {
+    return password;
+  }
+
+  try {
+    const encoded = password.slice(ENCRYPTED_PASSWORD_PREFIX.length);
+    return safeStorage.decryptString(Buffer.from(encoded, 'base64'));
+  } catch {
+    return '';
+  }
+}
+
+function settingsForDisk(settings: AppSettings): AppSettings {
+  const password = settings.webdav.password;
+  if (!password || !safeStorage.isEncryptionAvailable()) {
+    return settings;
+  }
+
+  const encrypted = safeStorage.encryptString(password).toString('base64');
+  return {
+    ...settings,
+    webdav: {
+      ...settings.webdav,
+      password: `${ENCRYPTED_PASSWORD_PREFIX}${encrypted}`
     }
   };
 }
@@ -55,9 +84,19 @@ export class StorageService {
   async loadSettings(): Promise<AppSettings> {
     try {
       const raw = await readFile(this.settingsPath, 'utf-8');
+      const parsed = JSON.parse(raw) as Partial<AppSettings> & { launchAtStartup?: unknown };
+      const { launchAtStartup: _legacyLaunchAtStartup, ...currentSettings } = parsed;
+      const webdav = {
+        ...defaultSettings().webdav,
+        ...currentSettings.webdav
+      };
       return {
         ...defaultSettings(),
-        ...JSON.parse(raw)
+        ...currentSettings,
+        webdav: {
+          ...webdav,
+          password: decryptWebDavPassword(webdav.password)
+        }
       };
     } catch {
       const next = defaultSettings();
@@ -68,7 +107,7 @@ export class StorageService {
 
   async saveSettings(settings: AppSettings) {
     await mkdir(path.dirname(this.settingsPath), { recursive: true });
-    await writeFile(this.settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    await writeFile(this.settingsPath, JSON.stringify(settingsForDisk(settings), null, 2), 'utf-8');
   }
 
   async ensureTodoFile(todoPath: string) {

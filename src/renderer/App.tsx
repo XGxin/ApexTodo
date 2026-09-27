@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
-import { AppSettings, AppState, CodexUsage, CodexUsageWindow, ThemeMode, TodoItem, UpdateState } from '../shared/types';
+import { AppSettings, AppState, CodexUsage, CodexUsageWindow, ThemeMode, TodoItem } from '../shared/types';
 import { SortableTaskItem } from './components/SortableTaskItem';
 import {
   ApexLogo,
@@ -36,7 +36,6 @@ const defaultSettings: AppSettings = {
   desktopLockPosition: true,
   desktopMouseThrough: false,
   showCodexUsage: false,
-  launchAtStartup: false,
   windowOpacity: 0.96,
   theme: 'light',
   webdav: {
@@ -182,7 +181,6 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [codexUsage, setCodexUsage] = useState<CodexUsage | null>(null);
   const [usageRefreshing, setUsageRefreshing] = useState(false);
-  const [updateState, setUpdateState] = useState<UpdateState | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const dragStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
@@ -219,18 +217,6 @@ export default function App() {
       offOpenSettings();
     };
   }, [settingsOpen]);
-
-  useEffect(() => {
-    void window.todoApi.getUpdateState().then(setUpdateState);
-    const offUpdate = window.todoApi.onUpdateState((next) => {
-      setUpdateState(next);
-      if (next.status === 'downloaded') {
-        setToastText(`v${next.version} 已下载，可立即重启更新`);
-        setTimeout(() => setToastText(''), 4000);
-      }
-    });
-    return offUpdate;
-  }, []);
 
   useEffect(() => {
     if (!state?.settings.showCodexUsage) {
@@ -407,7 +393,6 @@ export default function App() {
     const next = await window.todoApi.updateSettings({
       todoFilePath: settingsDraft.todoFilePath,
       globalShortcut: settingsDraft.globalShortcut,
-      launchAtStartup: settingsDraft.launchAtStartup,
       desktopLockPosition: settingsDraft.desktopLockPosition,
       desktopMouseThrough: settingsDraft.desktopMouseThrough,
       showCodexUsage: settingsDraft.showCodexUsage,
@@ -463,14 +448,6 @@ export default function App() {
     } finally {
       setSyncing(false);
     }
-  }
-
-  async function checkForUpdates() {
-    setUpdateState(await window.todoApi.checkForUpdates());
-  }
-
-  async function installUpdate() {
-    await window.todoApi.installUpdate();
   }
 
   function updateWebdav<K extends keyof AppSettings['webdav']>(key: K, value: AppSettings['webdav'][K]) {    setSettingsDraft((prev) => ({
@@ -542,17 +519,6 @@ export default function App() {
               aria-label="刷新 Codex 用量"
             >
               <RefreshIcon size={12} className={usageRefreshing ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        )}
-
-        {updateState?.status === 'downloaded' && (
-          <div className="mx-3 mb-1.5 flex items-center gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] px-2.5 py-1.5">
-            <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-[var(--text)]">
-              新版本 v{updateState.version} 已准备好
-            </p>
-            <button className="ghost-text !py-1 text-[11px]" onClick={() => void installUpdate()}>
-              立即重启更新
             </button>
           </div>
         )}
@@ -729,16 +695,6 @@ export default function App() {
                 onChange={(event) => setSettingsDraft((prev) => ({ ...prev, desktopMouseThrough: event.target.checked }))}
               />
             </div>
-            <div className="setting-row">
-              <div className="setting-label">开机自启（静默）</div>
-              <input
-                type="checkbox"
-                className="toggle"
-                checked={settingsDraft.launchAtStartup}
-                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, launchAtStartup: event.target.checked }))}
-              />
-            </div>
-
             <p className="setting-group-label">Codex 用量</p>
             <div className="setting-row">
               <div>
@@ -751,50 +707,6 @@ export default function App() {
                 checked={settingsDraft.showCodexUsage}
                 onChange={(event) => setSettingsDraft((prev) => ({ ...prev, showCodexUsage: event.target.checked }))}
               />
-            </div>
-
-            <p className="setting-group-label">应用更新</p>
-            <div className="setting-row items-start">
-              <div className="min-w-0 flex-1">
-                <div className="setting-label">
-                  {updateState ? `当前版本 v${updateState.currentVersion}` : '正在读取当前版本…'}
-                </div>
-                <div className={`setting-hint break-all ${updateState?.status === 'error' ? 'text-rose-500' : ''}`}>
-                  {updateState?.message ?? '正在读取更新状态…'}
-                </div>
-                {updateState?.status === 'downloading' && (
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--line-strong)]">
-                    <div
-                      className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
-                      style={{ width: `${updateState.percent ?? 0}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-              {updateState?.status === 'downloaded' ? (
-                <button className="ghost-text flex-shrink-0" onClick={() => void installUpdate()}>
-                  重启更新
-                </button>
-              ) : (
-                <button
-                  className="ghost-text flex-shrink-0"
-                  onClick={() => void checkForUpdates()}
-                  disabled={
-                    !updateState ||
-                    updateState.status === 'disabled' ||
-                    updateState.status === 'checking' ||
-                    updateState.status === 'downloading'
-                  }
-                >
-                  <RefreshIcon
-                    size={12}
-                    className={
-                      updateState?.status === 'checking' || updateState?.status === 'downloading' ? 'animate-spin' : ''
-                    }
-                  />
-                  {updateState?.status === 'checking' ? '检查中…' : '检查更新'}
-                </button>
-              )}
             </div>
 
             <p className="setting-group-label">外观</p>

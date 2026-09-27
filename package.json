@@ -1,9 +1,9 @@
 {
   "name": "apex-todo",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "description": "ApexTodo local markdown todo desktop widget",
   "main": "dist-electron/main.js",
-  "author": "you",
+  "author": "BigWatermelon",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -18,8 +18,7 @@
     "build:renderer": "node ./node_modules/vite/dist/node/cli.js build",
     "build:main": "tsup --config tsup.config.ts",
     "preview": "node ./node_modules/vite/dist/node/cli.js preview",
-    "dist": "npm run build && electron-builder --win nsis --publish never",
-    "dist:portable": "npm run build && electron-builder --win portable --publish never",
+    "dist": "npm run build && electron-builder --win appx --x64",
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
@@ -29,7 +28,6 @@
     "@dnd-kit/utilities": "^3.2.2",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.13",
-    "electron-updater": "^6.8.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "webdav": "^5.7.1"
@@ -64,48 +62,39 @@
     "directories": {
       "output": "release"
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "XGxin",
-        "repo": "ApexTodo",
-        "releaseType": "release"
-      }
-    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "build/icon.ico",
-        "to": "ApexTodo-${version}.ico"
-      }
-    ],
     "win": {
       "icon": "build/icon.ico",
       "target": [
         {
-          "target": "nsis",
+          "target": "appx",
           "arch": [
             "x64"
           ]
         }
-      ],
-      "signExecutable": false
+      ]
     },
-    "nsis": {
-      "artifactName": "${productName}.Setup.${version}.${ext}",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
-      "include": "scripts/installer.nsh",
-      "oneClick": true,
-      "perMachine": false,
-      "runAfterFinish": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+    "appx": {
+      "identityName": "BigWatermelon.ApexTodo",
+      "publisher": "CN=3E0A3275-0795-4C6C-B5B3-A350C4BC8567",
+      "publisherDisplayName": "BigWatermelon",
+      "applicationId": "ApexTodo",
+      "displayName": "ApexTodo",
+      "backgroundColor": "#0ccf6c",
+      "languages": [
+        "zh-CN",
+        "en-US"
+      ],
+      "capabilities": [
+        "internetClient",
+        "privateNetworkClientServer",
+        "runFullTrust"
+      ],
+      "artifactName": "${productName}.${version}.${arch}.${ext}"
     }
   }
 }

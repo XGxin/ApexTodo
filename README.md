@@ -14,7 +14,7 @@
 - 桌面模式：支持嵌入桌面、锁定位置、鼠标穿透（`Ctrl+Shift+Z` 快速切换）。
 - WebDAV 同步：支持手动同步和定时同步（默认每 60 分钟）。
 - Codex 用量：可在设置中开启 5 小时与本周用量显示（默认关闭），同时显示各窗口的重置时间。
-- 应用内更新：安装版会自动检查并后台下载新版本，可直接重启完成更新。
+- Microsoft Store 更新：由 Microsoft Store 统一下载、安装和更新。
 - 仅新增通知：只有“新增待办”会触发系统通知，其他操作静默。
 
 ## 技术栈
@@ -25,15 +25,11 @@
 - dnd-kit
 - WebDAV SDK
 
-## 下载
+## 获取应用
 
-前往 [GitHub Releases](https://github.com/XGxin/ApexTodo/releases/latest) 下载最新版本。
+ApexTodo 仅通过 Microsoft Store 面向 Windows 10/11 x64 发布。安装、签名和更新均由 Microsoft Store 管理。
 
-- 支持 Windows 10/11 x64。
-- 推荐下载 NSIS 安装版，后续版本可直接在应用内更新。
-- 安装版采用当前用户一键安装，无需选择目录或管理员权限。
-- 同时保留单文件便携版；便携版无需安装，但不支持自动更新。
-- 待办和设置仍保存在用户目录，更新 EXE 不会把数据封装进程序文件。
+Store ID：`9NTGV0XMSM3Q`
 
 ## 项目结构
 
@@ -86,21 +82,11 @@ npm run build
 
 ## 打包发布
 
-### 安装版（NSIS）
+### Microsoft Store 包（AppX / MSIX）
 
 ```bash
 npm run dist
 ```
-
-### 便携版（Portable EXE）
-
-```bash
-npm run dist:portable
-```
-
-便携版输出为单个 EXE 文件，无需安装，下载后可直接运行。
-
-便携版不支持应用内自动更新；需要自动更新时请使用 NSIS 安装版。
 
 打包输出目录：`release/`
 
@@ -133,11 +119,8 @@ npm run dist:portable
 
 ### 应用更新
 
-- NSIS 安装版启动后会自动检查新版本，发现更新后在后台下载。
-- 下载完成后，顶部和设置面板会提示“重启更新”；普通退出应用时也会自动安装已下载的更新。
-- 设置面板可以随时手动检查更新并查看下载进度。
-- 更新文件由 GitHub Releases 托管，但用户不需要打开 GitHub 或手动下载安装包。
-- 单文件便携版不支持自动更新；从便携版迁移时，需要最后一次手动运行 NSIS 安装包。
+- 新版本通过 Microsoft Store 提交、审核和分发。
+- Windows 会通过 Microsoft Store 自动更新 ApexTodo，应用本身不再下载或执行安装程序。
 
 ### 外观主题
 
@@ -154,12 +137,6 @@ npm run dist:portable
 - 默认待办文件：`文档/ApexTodo/todo.md`
 - 设置中可直接选择“待办文件夹”，程序会自动使用该目录下的 `todo.md`。
 - 外部编辑 `todo.md` 后，界面会自动热更新。
-
-### 开机启动
-
-- 在设置中开启「开机启动」后，登录 Windows 会自动运行并显示主窗口。
-- 便携版会把启动项指向你手中 EXE 的真实路径，请把 EXE 放在固定目录（不要放在会被系统清理的临时 / 下载目录）；安装版使用系统标准登录项。
-- 关闭「开机启动」会自动清除对应的注册表启动项。
 
 ### WebDAV 同步
 
@@ -178,3 +155,7 @@ npm run dist:portable
 
 - 全局抓取依赖系统复制行为，某些高权限窗口可能无法抓取。
 - 桌面模式是 Electron 下的近似实现，不是系统底层壁纸层嵌入。
+
+## 隐私
+
+请参阅 [隐私政策](PRIVACY.md)。

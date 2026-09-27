@@ -1,6 +1,6 @@
 // 零依赖生成 ApexTodo 图标：A 字尖峰(Apex) + 腰间对勾(Todo)，2x 超采样抗锯齿。
 // 运行：node scripts/generate-icons.mjs
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -203,6 +203,16 @@ async function main() {
   await writeFile(path.join(root, 'build', 'icon.png'), encodePng(rasterize(512), 512, 512));
   await writeFile(path.join(root, 'resources', 'tray-icon.png'), pngs.find((p) => p.size === 32).data);
 
+  const appxAssetDir = path.join(root, 'build', 'appx');
+  await mkdir(appxAssetDir, { recursive: true });
+  await writeFile(path.join(appxAssetDir, 'StoreLogo.png'), encodePng(rasterize(50), 50, 50));
+  await writeFile(path.join(appxAssetDir, 'Square150x150Logo.png'), encodePng(rasterize(150), 150, 150));
+  await writeFile(path.join(appxAssetDir, 'Square44x44Logo.png'), encodePng(rasterize(44), 44, 44));
+
+  const wideTile = Buffer.alloc(310 * 150 * 4);
+  paste(wideTile, 310, 150, rasterize(120), 120, 95, 15);
+  await writeFile(path.join(appxAssetDir, 'Wide310x150Logo.png'), encodePng(wideTile, 310, 150));
+
   const W = 760;
   const H = 380;
   const preview = Buffer.alloc(W * H * 4);
@@ -227,7 +237,7 @@ async function main() {
   paste(preview, W, H, raster[16], 16, 642, 261);
   await writeFile(path.join(root, 'build', 'icon-preview.png'), encodePng(preview, W, H));
 
-  console.log('图标已生成：build/icon.ico, build/icon.png, resources/tray-icon.png, build/icon-preview.png');
+  console.log('图标已生成：Windows、托盘与 Microsoft Store AppX 图标资源');
 }
 main().catch((err) => {
   console.error(err);
