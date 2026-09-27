@@ -1,6 +1,6 @@
 {
   "name": "apex-todo",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "ApexTodo local markdown todo desktop widget",
   "main": "dist-electron/main.js",
   "author": "you",
@@ -43,7 +43,7 @@
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron": "^34.1.1",
-    "electron-builder": "^25.1.8",
+    "electron-builder": "^26.15.3",
     "nodemon": "^3.1.9",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
@@ -90,8 +90,9 @@
     },
     "nsis": {
       "artifactName": "${productName}.Setup.${version}.${ext}",
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
